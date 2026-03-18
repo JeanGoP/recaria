@@ -353,15 +353,15 @@
                   </div>
                 </div>
                 <div class="chart">
-                  <form class="query" id="configForm" autocomplete="off">
-                    <label class="field">
-                      <span class="field__label">URL API</span>
+                  <form class="query query--config" id="configForm" autocomplete="off">
+                    <div class="field">
+                      <label class="field__label" for="configApiUrl">URL API</label>
                       <input class="input input--wide mono" id="configApiUrl" name="configApiUrl" type="url" placeholder="https://..." required />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">Token</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configToken">Token</label>
                       <input class="input input--wide mono" id="configToken" name="configToken" type="password" placeholder="Pega tu token" required />
-                    </label>
+                    </div>
                     <div class="field">
                       <span class="field__label">Conexión</span>
                       <label class="check" for="configUseProxy">
@@ -376,44 +376,48 @@
                         <span class="check__label">Ejecutar una vez al día</span>
                       </label>
                     </div>
-                    <label class="field">
-                      <span class="field__label">Hora</span>
+                    <div class="field">
+                      <label class="field__label" for="configScheduleTime">Hora</label>
                       <input class="input mono" id="configScheduleTime" name="configScheduleTime" type="time" />
-                    </label>
+                    </div>
                     <div class="divider" aria-hidden="true"></div>
                     <div class="muted" style="margin-top: 2px">Gestión WhatsApp (LeadConnector)</div>
-                    <label class="field">
-                      <span class="field__label">Token WhatsApp</span>
+                    <div class="field">
+                      <label class="field__label" for="configLcToken">Token WhatsApp</label>
                       <input class="input input--wide mono" id="configLcToken" name="configLcToken" type="password" placeholder="Bearer token" />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">LocationId</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcLocationId">LocationId</label>
                       <input class="input input--wide mono" id="configLcLocationId" name="configLcLocationId" type="text" placeholder="x8eF7OoF2Ld9p1ASAUGe" />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">Campo teléfono (JSON)</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcPhoneField">Campo teléfono (JSON)</label>
                       <input class="input mono" id="configLcPhoneField" name="configLcPhoneField" type="text" placeholder="telefono / celular / phone" />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">FromNumber (WhatsApp)</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcFromNumber">FromNumber (WhatsApp)</label>
                       <input class="input input--wide mono" id="configLcFromNumber" name="configLcFromNumber" type="text" placeholder="+576045906083" />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">Tag Por vencer</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcTagPorVencer">Tag Por vencer</label>
                       <input class="input mono" id="configLcTagPorVencer" name="configLcTagPorVencer" type="text" placeholder="recarIA_por_vencer" />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">Tag Cobro</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcTagCobro">Tag Cobro</label>
                       <input class="input mono" id="configLcTagCobro" name="configLcTagCobro" type="text" placeholder="recarIA_cobro" />
-                    </label>
-                    <label class="field">
-                      <span class="field__label">Mensaje Por vencer</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcTplPorVencer">Mensaje Por vencer</label>
                       <textarea class="input input--wide" id="configLcTplPorVencer" name="configLcTplPorVencer" rows="3"></textarea>
-                    </label>
-                    <label class="field">
-                      <span class="field__label">Mensaje Cobro</span>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcTplCobro">Mensaje Cobro</label>
                       <textarea class="input input--wide" id="configLcTplCobro" name="configLcTplCobro" rows="3"></textarea>
-                    </label>
+                    </div>
+                    <div class="field">
+                      <label class="field__label" for="configLcTestToNumber">Número de prueba</label>
+                      <input class="input input--wide mono" id="configLcTestToNumber" name="configLcTestToNumber" type="text" placeholder="+573192505244" />
+                    </div>
                     <div class="field">
                       <span class="field__label">Automatización</span>
                       <label class="check" for="configLcAuto">
@@ -421,12 +425,13 @@
                         <span class="check__label">Enviar WhatsApp después de sincronizar</span>
                       </label>
                     </div>
-                    <label class="field">
-                      <span class="field__label">Máx. envíos por corrida</span>
+                    <div class="field">
+                      <label class="field__label" for="configLcMax">Máx. envíos por corrida</label>
                       <input class="input mono" id="configLcMax" name="configLcMax" type="number" min="1" max="200" step="1" />
-                    </label>
+                    </div>
                     <button class="btn btn--secondary" id="runNow" type="button">Ejecutar ahora</button>
                     <button class="btn btn--secondary" id="testWhatsApp" type="button">Probar WhatsApp</button>
+                    <button class="btn btn--secondary" id="testWhatsAppToNumber" type="button">Probar a número</button>
                     <button class="btn btn--secondary" id="sendReminders" type="button">Enviar por vencer</button>
                     <button class="btn btn--secondary" id="sendCollections" type="button">Enviar cobro</button>
                     <button class="btn btn--primary" id="saveConfig" type="submit">Guardar</button>

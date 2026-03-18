@@ -241,6 +241,45 @@ a {
   justify-content: flex-end;
 }
 
+.query--config {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  justify-content: stretch;
+  gap: 12px;
+}
+
+.query--config .field {
+  min-width: 0;
+}
+
+.query--config .input,
+.query--config .check {
+  min-width: 0;
+  width: 100%;
+}
+
+.query--config .input--wide {
+  min-width: 0;
+  width: 100%;
+}
+
+.query--config textarea.input {
+  height: auto;
+  padding: 10px;
+}
+
+.query--config .divider,
+.query--config .muted,
+.query--config #runNow,
+.query--config #testWhatsApp,
+.query--config #testWhatsAppToNumber,
+.query--config #sendReminders,
+.query--config #sendCollections,
+.query--config #saveConfig {
+  grid-column: 1 / -1;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -344,6 +383,14 @@ a {
 
 .view--hidden {
   display: none;
+}
+
+#view-config,
+#view-config .panel,
+#view-config .chart,
+#view-config .query--config {
+  position: relative;
+  z-index: 2;
 }
 
 .cards {

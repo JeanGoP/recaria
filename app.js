@@ -18,6 +18,7 @@ const STORAGE_KEYS = {
   lcFromNumber: "collectai.lc.fromNumber",
   lcTplPorVencer: "collectai.lc.tplPorVencer",
   lcTplCobro: "collectai.lc.tplCobro",
+  lcTestToNumber: "collectai.lc.testToNumber",
   lcAuto: "collectai.lc.auto",
   lcMax: "collectai.lc.max",
 };
@@ -240,12 +241,14 @@ const init = () => {
   const configLcTagCobroInput = document.getElementById("configLcTagCobro");
   const configLcTplPorVencerInput = document.getElementById("configLcTplPorVencer");
   const configLcTplCobroInput = document.getElementById("configLcTplCobro");
+  const configLcTestToNumberInput = document.getElementById("configLcTestToNumber");
   const configLcAutoInput = document.getElementById("configLcAuto");
   const configLcMaxInput = document.getElementById("configLcMax");
   const scheduleNextRunEl = document.getElementById("scheduleNextRun");
   const scheduleLastRunEl = document.getElementById("scheduleLastRun");
   const runNowBtn = document.getElementById("runNow");
   const testWhatsAppBtn = document.getElementById("testWhatsApp");
+  const testWhatsAppToNumberBtn = document.getElementById("testWhatsAppToNumber");
   const sendRemindersBtn = document.getElementById("sendReminders");
   const sendCollectionsBtn = document.getElementById("sendCollections");
 
@@ -293,6 +296,7 @@ const init = () => {
   const storedLcTplCobro =
     window.localStorage.getItem(STORAGE_KEYS.lcTplCobro) ||
     "Hola {nombre}, tu factura {factura} venció el {vencimiento} hace {dias} días. Saldo pendiente: {saldo}.";
+  const storedLcTestToNumber = window.localStorage.getItem(STORAGE_KEYS.lcTestToNumber) || "";
   const storedLcAuto = window.localStorage.getItem(STORAGE_KEYS.lcAuto) === "1";
   const storedLcMaxRaw = window.localStorage.getItem(STORAGE_KEYS.lcMax) || "50";
   const storedLcMax = Number.isFinite(Number(storedLcMaxRaw)) ? Math.trunc(Number(storedLcMaxRaw)) : 50;
@@ -321,6 +325,7 @@ const init = () => {
   let lcFromNumber = storedLcFromNumber;
   let lcTplPorVencer = storedLcTplPorVencer;
   let lcTplCobro = storedLcTplCobro;
+  let lcTestToNumber = storedLcTestToNumber;
   let lcAuto = storedLcAuto;
   let lcMax = storedLcMax;
 
@@ -372,7 +377,11 @@ const init = () => {
 
     if (viewName === "config") {
       setHidden(form, true);
-      window.setTimeout(() => (configTokenInput || configApiUrlInput)?.focus(), 0);
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (active && configForm && configForm.contains(active)) return;
+        (configApiUrlInput || configTokenInput)?.focus();
+      }, 0);
     } else {
       setHidden(form, false);
     }
@@ -440,6 +449,7 @@ const init = () => {
     if (runNowBtn) runNowBtn.disabled = !isConfigured();
     const waOk = isWhatsAppConfigured();
     if (testWhatsAppBtn) testWhatsAppBtn.disabled = !waOk;
+    if (testWhatsAppToNumberBtn) testWhatsAppToNumberBtn.disabled = !waOk;
     if (sendRemindersBtn) sendRemindersBtn.disabled = !waOk;
     if (sendCollectionsBtn) sendCollectionsBtn.disabled = !waOk;
   };
@@ -477,6 +487,7 @@ const init = () => {
   if (configLcTagCobroInput) configLcTagCobroInput.value = lcTagCobro;
   if (configLcTplPorVencerInput) configLcTplPorVencerInput.value = lcTplPorVencer;
   if (configLcTplCobroInput) configLcTplCobroInput.value = lcTplCobro;
+  if (configLcTestToNumberInput) configLcTestToNumberInput.value = lcTestToNumber;
   if (configLcAutoInput) configLcAutoInput.checked = lcAuto;
   if (configLcMaxInput) configLcMaxInput.value = String(lcMax || 50);
   refreshConfigUi();
@@ -654,6 +665,63 @@ const init = () => {
     const trunc = Boolean(json?.truncated);
     setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}`);
     return { ok: failed === 0, sent, failed };
+  };
+
+  const sendTestToNumber = async () => {
+    if (!isWhatsAppConfigured()) {
+      setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
+      return;
+    }
+
+    const to = normalizePhone(configLcTestToNumberInput?.value || lcTestToNumber || "");
+    if (!to) {
+      setConfigStatus("Ingresa un número de prueba válido.");
+      return;
+    }
+
+    if (!String(lcFromNumber || "").trim()) {
+      setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
+      return;
+    }
+
+    setConfigStatus(`Enviando WhatsApp a ${to}…`);
+
+    const resp = await fetch("/.netlify/functions/leadconnector", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        action: "sendWhatsApp",
+        token: lcToken,
+        locationId: lcLocationId,
+        fromNumber: lcFromNumber,
+        versionMsg: "2021-04-15",
+        messages: [
+          {
+            name: "Prueba",
+            toNumber: to,
+            message: "Prueba",
+          },
+        ],
+        max: 1,
+      }),
+    });
+
+    const text = await resp.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+
+    if (!resp.ok) {
+      setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+      return;
+    }
+
+    const sent = Number(json?.sent ?? 0);
+    const failed = Number(json?.failed ?? 0);
+    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error`);
   };
 
   const render = () => {
@@ -1064,6 +1132,7 @@ const init = () => {
       if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
       if (configLcTplPorVencerInput) lcTplPorVencer = String(configLcTplPorVencerInput.value || "").trim() || storedLcTplPorVencer;
       if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
+      if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
       if (configLcAutoInput) lcAuto = Boolean(configLcAutoInput.checked);
       if (configLcMaxInput) {
         const n = Number(configLcMaxInput.value);
@@ -1078,6 +1147,7 @@ const init = () => {
       window.localStorage.setItem(STORAGE_KEYS.lcTagCobro, lcTagCobro);
       window.localStorage.setItem(STORAGE_KEYS.lcTplPorVencer, lcTplPorVencer);
       window.localStorage.setItem(STORAGE_KEYS.lcTplCobro, lcTplCobro);
+      window.localStorage.setItem(STORAGE_KEYS.lcTestToNumber, lcTestToNumber);
       window.localStorage.setItem(STORAGE_KEYS.lcAuto, lcAuto ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.lcMax, String(lcMax));
 
@@ -1096,6 +1166,12 @@ const init = () => {
   if (testWhatsAppBtn) {
     testWhatsAppBtn.addEventListener("click", () => {
       sendToLeadConnector({ mode: "porVencer", test: true });
+    });
+  }
+
+  if (testWhatsAppToNumberBtn) {
+    testWhatsAppToNumberBtn.addEventListener("click", () => {
+      sendTestToNumber();
     });
   }
 
