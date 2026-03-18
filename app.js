@@ -10,6 +10,13 @@ const STORAGE_KEYS = {
   scheduleLastRunAt: "collectai.schedule.lastRunAt",
   scheduleLastRunCount: "collectai.schedule.lastRunCount",
   scheduleLastRunError: "collectai.schedule.lastRunError",
+  lcToken: "collectai.lc.token",
+  lcLocationId: "collectai.lc.locationId",
+  lcPhoneField: "collectai.lc.phoneField",
+  lcTagPorVencer: "collectai.lc.tagPorVencer",
+  lcTagCobro: "collectai.lc.tagCobro",
+  lcAuto: "collectai.lc.auto",
+  lcMax: "collectai.lc.max",
 };
 
 const formatLastSync = (date) => {
@@ -222,9 +229,19 @@ const init = () => {
   const configUseProxyInput = document.getElementById("configUseProxy");
   const configScheduleEnabledInput = document.getElementById("configScheduleEnabled");
   const configScheduleTimeInput = document.getElementById("configScheduleTime");
+  const configLcTokenInput = document.getElementById("configLcToken");
+  const configLcLocationIdInput = document.getElementById("configLcLocationId");
+  const configLcPhoneFieldInput = document.getElementById("configLcPhoneField");
+  const configLcTagPorVencerInput = document.getElementById("configLcTagPorVencer");
+  const configLcTagCobroInput = document.getElementById("configLcTagCobro");
+  const configLcAutoInput = document.getElementById("configLcAuto");
+  const configLcMaxInput = document.getElementById("configLcMax");
   const scheduleNextRunEl = document.getElementById("scheduleNextRun");
   const scheduleLastRunEl = document.getElementById("scheduleLastRun");
   const runNowBtn = document.getElementById("runNow");
+  const testWhatsAppBtn = document.getElementById("testWhatsApp");
+  const sendRemindersBtn = document.getElementById("sendReminders");
+  const sendCollectionsBtn = document.getElementById("sendCollections");
 
   const totalCarteraEl = document.getElementById("totalCartera");
   const facturasTotalesEl = document.getElementById("facturasTotales");
@@ -258,6 +275,14 @@ const init = () => {
   const storedUseProxy = storedUseProxyRaw === null ? inferredProxy : storedUseProxyRaw === "1";
   const storedScheduleEnabled = window.localStorage.getItem(STORAGE_KEYS.scheduleEnabled) === "1";
   const storedScheduleTime = window.localStorage.getItem(STORAGE_KEYS.scheduleTime) || "02:00";
+  const storedLcToken = window.localStorage.getItem(STORAGE_KEYS.lcToken) || "";
+  const storedLcLocationId = window.localStorage.getItem(STORAGE_KEYS.lcLocationId) || "";
+  const storedLcPhoneField = window.localStorage.getItem(STORAGE_KEYS.lcPhoneField) || "telefono";
+  const storedLcTagPorVencer = window.localStorage.getItem(STORAGE_KEYS.lcTagPorVencer) || "recarIA_por_vencer";
+  const storedLcTagCobro = window.localStorage.getItem(STORAGE_KEYS.lcTagCobro) || "recarIA_cobro";
+  const storedLcAuto = window.localStorage.getItem(STORAGE_KEYS.lcAuto) === "1";
+  const storedLcMaxRaw = window.localStorage.getItem(STORAGE_KEYS.lcMax) || "50";
+  const storedLcMax = Number.isFinite(Number(storedLcMaxRaw)) ? Math.trunc(Number(storedLcMaxRaw)) : 50;
 
   identificacionInput.value = storedIdentificacion;
   fechaInput.value = getTodayISO();
@@ -275,9 +300,20 @@ const init = () => {
   let scheduleEnabled = storedScheduleEnabled;
   let scheduleTime = storedScheduleTime;
   let scheduleIntervalId = null;
+  let lcToken = storedLcToken;
+  let lcLocationId = storedLcLocationId;
+  let lcPhoneField = storedLcPhoneField;
+  let lcTagPorVencer = storedLcTagPorVencer;
+  let lcTagCobro = storedLcTagCobro;
+  let lcAuto = storedLcAuto;
+  let lcMax = storedLcMax;
 
   const isConfigured = () => {
     return String(configApiUrl || "").trim().length > 0 && String(configToken || "").trim().length > 0;
+  };
+
+  const isWhatsAppConfigured = () => {
+    return String(lcToken || "").trim().length > 0 && String(lcLocationId || "").trim().length > 0;
   };
 
   const setLoading = (loading) => {
@@ -386,6 +422,10 @@ const init = () => {
     }
 
     if (runNowBtn) runNowBtn.disabled = !isConfigured();
+    const waOk = isWhatsAppConfigured();
+    if (testWhatsAppBtn) testWhatsAppBtn.disabled = !waOk;
+    if (sendRemindersBtn) sendRemindersBtn.disabled = !waOk;
+    if (sendCollectionsBtn) sendCollectionsBtn.disabled = !waOk;
   };
 
   const refreshConfigUi = () => {
@@ -413,7 +453,152 @@ const init = () => {
   if (configUseProxyInput) configUseProxyInput.checked = useProxy;
   if (configScheduleEnabledInput) configScheduleEnabledInput.checked = scheduleEnabled;
   if (configScheduleTimeInput) configScheduleTimeInput.value = scheduleTime;
+  if (configLcTokenInput) configLcTokenInput.value = lcToken;
+  if (configLcLocationIdInput) configLcLocationIdInput.value = lcLocationId;
+  if (configLcPhoneFieldInput) configLcPhoneFieldInput.value = lcPhoneField;
+  if (configLcTagPorVencerInput) configLcTagPorVencerInput.value = lcTagPorVencer;
+  if (configLcTagCobroInput) configLcTagCobroInput.value = lcTagCobro;
+  if (configLcAutoInput) configLcAutoInput.checked = lcAuto;
+  if (configLcMaxInput) configLcMaxInput.value = String(lcMax || 50);
   refreshConfigUi();
+
+  const normalizePhone = (raw) => {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    if (s.startsWith("+")) return s.replace(/\s+/g, "");
+    const digits = s.replace(/[^\d]/g, "");
+    if (!digits) return "";
+    if (digits.length === 12 && digits.startsWith("57")) return `+${digits}`;
+    if (digits.length === 10) return `+57${digits}`;
+    if (digits.length >= 11 && digits.length <= 15) return `+${digits}`;
+    return s;
+  };
+
+  const getPhone = (item) => {
+    const preferred = String(lcPhoneField || "").trim();
+    const preferredValue = preferred ? pickString(item, [preferred]) : "";
+    const v =
+      preferredValue ||
+      pickString(item, ["telefono", "Telefono", "tel", "Tel", "celular", "Celular", "movil", "Movil", "whatsapp", "WhatsApp", "phone", "Phone"]);
+    return normalizePhone(v);
+  };
+
+  const getEmail = (item) => {
+    return pickString(item, ["email", "Email", "correo", "Correo", "mail", "Mail"]) || "";
+  };
+
+  const buildContacts = ({ mode }) => {
+    const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
+    const tag = mode === "porVencer" ? String(lcTagPorVencer || "").trim() : String(lcTagCobro || "").trim();
+    const wanted = [];
+    const seen = new Set();
+    let missingPhone = 0;
+
+    for (const it of currentItems) {
+      const dias = getDias(it);
+      if (dias === null) continue;
+      if (mode === "porVencer") {
+        if (dias > 0) continue;
+        if (Math.abs(dias) > selectedRange) continue;
+      } else {
+        if (dias <= 0) continue;
+      }
+
+      const phone = getPhone(it);
+      if (!phone) {
+        missingPhone += 1;
+        continue;
+      }
+
+      if (seen.has(phone)) continue;
+      seen.add(phone);
+
+      const name = pickString(it, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
+      const email = getEmail(it);
+      const contact = {
+        name,
+        phone,
+      };
+      if (email) contact.email = email;
+      if (tag) contact.tags = [tag];
+      wanted.push(contact);
+      if (wanted.length >= maxLocal) break;
+    }
+
+    return { contacts: wanted, missingPhone };
+  };
+
+  const sendToLeadConnector = async ({ mode, test }) => {
+    if (!isWhatsAppConfigured()) {
+      setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
+      return { ok: false, error: "no_config" };
+    }
+
+    const version = "2021-07-28";
+    const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
+
+    let contacts = [];
+    let missingPhone = 0;
+    if (test) {
+      const first = currentItems[0];
+      if (!first) {
+        setConfigStatus("No hay datos cargados para probar.");
+        return { ok: false, error: "no_data" };
+      }
+      const phone = getPhone(first);
+      if (!phone) {
+        setConfigStatus("No se encontró teléfono en el primer registro.");
+        return { ok: false, error: "no_phone" };
+      }
+      const name = pickString(first, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
+      const email = getEmail(first);
+      const contact = { name, phone };
+      if (email) contact.email = email;
+      contacts = [contact];
+    } else {
+      const built = buildContacts({ mode });
+      contacts = built.contacts;
+      missingPhone = built.missingPhone;
+    }
+
+    if (contacts.length === 0) {
+      setConfigStatus(missingPhone ? `Sin teléfonos para enviar (${missingPhone} sin teléfono).` : "No hay contactos para enviar.");
+      return { ok: true, sent: 0, failed: 0 };
+    }
+
+    setConfigStatus(`Enviando WhatsApp (${contacts.length}${missingPhone ? ` • ${missingPhone} sin teléfono` : ""})…`);
+
+    const resp = await fetch("/.netlify/functions/leadconnector", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        token: lcToken,
+        locationId: lcLocationId,
+        version,
+        contacts,
+        max: maxLocal,
+      }),
+    });
+
+    const text = await resp.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+
+    if (!resp.ok) {
+      setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+      return { ok: false, error: text || `HTTP ${resp.status}` };
+    }
+
+    const sent = Number(json?.sent ?? 0);
+    const failed = Number(json?.failed ?? 0);
+    const trunc = Boolean(json?.truncated);
+    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}`);
+    return { ok: failed === 0, sent, failed };
+  };
 
   const render = () => {
     const q = String(filterInput.value || "").trim().toLowerCase();
@@ -725,6 +910,10 @@ const init = () => {
     if (res?.ok) {
       window.localStorage.setItem(STORAGE_KEYS.scheduleLastRunError, "");
       window.localStorage.setItem(STORAGE_KEYS.scheduleLastRunCount, String(res.count ?? 0));
+      if (lcAuto && isWhatsAppConfigured()) {
+        await sendToLeadConnector({ mode: "porVencer", test: false });
+        await sendToLeadConnector({ mode: "cobro", test: false });
+      }
     } else if (res?.error) {
       window.localStorage.setItem(STORAGE_KEYS.scheduleLastRunError, String(res.error));
     }
@@ -811,6 +1000,25 @@ const init = () => {
       window.localStorage.setItem(STORAGE_KEYS.scheduleEnabled, scheduleEnabled ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.scheduleTime, scheduleTime);
 
+      if (configLcTokenInput) lcToken = String(configLcTokenInput.value || "").trim();
+      if (configLcLocationIdInput) lcLocationId = String(configLcLocationIdInput.value || "").trim();
+      if (configLcPhoneFieldInput) lcPhoneField = String(configLcPhoneFieldInput.value || "").trim() || "telefono";
+      if (configLcTagPorVencerInput) lcTagPorVencer = String(configLcTagPorVencerInput.value || "").trim() || "recarIA_por_vencer";
+      if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
+      if (configLcAutoInput) lcAuto = Boolean(configLcAutoInput.checked);
+      if (configLcMaxInput) {
+        const n = Number(configLcMaxInput.value);
+        lcMax = Number.isFinite(n) ? Math.max(1, Math.min(200, Math.trunc(n))) : 50;
+      }
+
+      window.localStorage.setItem(STORAGE_KEYS.lcToken, lcToken);
+      window.localStorage.setItem(STORAGE_KEYS.lcLocationId, lcLocationId);
+      window.localStorage.setItem(STORAGE_KEYS.lcPhoneField, lcPhoneField);
+      window.localStorage.setItem(STORAGE_KEYS.lcTagPorVencer, lcTagPorVencer);
+      window.localStorage.setItem(STORAGE_KEYS.lcTagCobro, lcTagCobro);
+      window.localStorage.setItem(STORAGE_KEYS.lcAuto, lcAuto ? "1" : "0");
+      window.localStorage.setItem(STORAGE_KEYS.lcMax, String(lcMax));
+
       setConfigStatus("Guardado");
       refreshConfigUi();
       startScheduler();
@@ -820,6 +1028,24 @@ const init = () => {
   if (runNowBtn) {
     runNowBtn.addEventListener("click", () => {
       runScheduled();
+    });
+  }
+
+  if (testWhatsAppBtn) {
+    testWhatsAppBtn.addEventListener("click", () => {
+      sendToLeadConnector({ mode: "porVencer", test: true });
+    });
+  }
+
+  if (sendRemindersBtn) {
+    sendRemindersBtn.addEventListener("click", () => {
+      sendToLeadConnector({ mode: "porVencer", test: false });
+    });
+  }
+
+  if (sendCollectionsBtn) {
+    sendCollectionsBtn.addEventListener("click", () => {
+      sendToLeadConnector({ mode: "cobro", test: false });
     });
   }
 

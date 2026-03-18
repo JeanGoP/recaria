@@ -761,6 +761,13 @@ a {
   background: rgba(255, 77, 109, 0.12);
 }
 
+.divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 10px 0 6px;
+}
+
 .muted {
   color: var(--muted2);
   font-size: 12px;
