@@ -70,6 +70,16 @@ const parseNumber = (value) => {
     s = s.replace(/,/g, ".");
   } else if (hasComma && !hasDot) {
     s = s.replace(/,/g, ".");
+  } else if (hasDot && !hasComma) {
+    const parts = s.split(".");
+    const last = parts[parts.length - 1] || "";
+    if (parts.length >= 2 && last.length === 3) {
+      s = parts.join("");
+    } else if (parts.length > 2) {
+      const decimal = parts.pop();
+      const integer = parts.join("");
+      s = `${integer}.${decimal}`;
+    }
   }
 
   const n = Number.parseFloat(s);
@@ -95,6 +105,17 @@ const parseDate = (value) => {
   if (!Number.isFinite(d.getTime())) return null;
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const parseDateTime2 = (value) => {
+  const s = String(value || "").trim();
+  if (!s) return null;
+  const d = new Date(s);
+  if (!Number.isFinite(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(
+    d.getMinutes()
+  )}:${pad(d.getSeconds())}`;
 };
 
 export async function handler(event) {
@@ -169,31 +190,22 @@ export async function handler(event) {
   for (const it of itemsRaw) {
     const numFactura = pickString(it, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "—";
     const iden = pickString(it, ["iden", "Identificacion", "identificacion"]) || "—";
-    uniq.set(`${numFactura}||${iden}`, it);
+    const vencKey = pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "—";
+    uniq.set(`${numFactura}||${iden}||${vencKey}`, it);
   }
   const items = Array.from(uniq.values());
 
-  const getSaldo = (it) => {
-    return (
-      pickNumber(it, ["saldo", "Saldo", "saldo_cuota", "Saldo_Cuota", "saldoCuota", "SaldoCuota", "SaldoFactura", "Saldo_Factura"]) ??
-      null
-    );
-  };
+  const getPorVencer = (it) => pickNumber(it, ["PorVencer", "porvencer", "Por_Vencer", "por_vencer"]) ?? 0;
+  const getTreinta = (it) => pickNumber(it, ["Treinta_Dias", "treinta_dias", "TreintaDias", "treintadias"]) ?? 0;
+  const getSesenta = (it) => pickNumber(it, ["sesenta_Dias", "Sesenta_Dias", "sesenta_dias", "SesentaDias", "sesentadias"]) ?? 0;
+  const getNoventa = (it) => pickNumber(it, ["noventa_Dias", "Noventa_Dias", "noventa_dias", "NoventaDias", "noventadias"]) ?? 0;
+  const getMasNoventa = (it) =>
+    pickNumber(it, ["Mas_de_Noventa", "mas_de_noventa", "MasDeNoventa", "Mas_De_Noventa", "masdenoventa"]) ?? 0;
 
-  const getCuota = (it) => {
-    return (
-      pickNumber(it, ["cuota", "Cuota", "valor_cuota", "Valor_Cuota", "valorCuota", "ValorCuota", "valorcuota"]) ?? null
-    );
-  };
-
-  const getMonto = (it) => {
-    return pickNumber(it, ["monto", "Monto", "valor", "Valor", "monto_cuota", "Monto_Cuota"]) ?? null;
-  };
+  const getSaldo = (it) => getPorVencer(it) + getTreinta(it) + getSesenta(it) + getNoventa(it) + getMasNoventa(it);
 
   const totalMonto = items.reduce((acc, it) => {
-    const saldo = getSaldo(it);
-    const monto = getMonto(it);
-    return acc + (saldo ?? monto ?? 0);
+    return acc + getSaldo(it);
   }, 0);
 
   let empresaId = null;
@@ -232,33 +244,49 @@ export async function handler(event) {
       table.columns.add("NumFactura", sql.NVarChar(64), { nullable: false });
       table.columns.add("Identificacion", sql.NVarChar(64), { nullable: false });
       table.columns.add("Cliente", sql.NVarChar(256), { nullable: true });
-      table.columns.add("Vencimiento", sql.Date, { nullable: true });
+      table.columns.add("FechaFac", sql.DateTime2(0), { nullable: true });
+      table.columns.add("AnoMes", sql.NVarChar(20), { nullable: true });
+      table.columns.add("Cuota", sql.Int, { nullable: true });
+      table.columns.add("Vencimiento", sql.Date, { nullable: false });
       table.columns.add("Dias", sql.Int, { nullable: true });
-      table.columns.add("Saldo", sql.Decimal(18, 2), { nullable: false });
-      table.columns.add("Cuota", sql.Decimal(18, 2), { nullable: false });
-      table.columns.add("Monto", sql.Decimal(18, 2), { nullable: false });
+      table.columns.add("PorVencer", sql.Decimal(18, 2), { nullable: false });
+      table.columns.add("Treinta_Dias", sql.Decimal(18, 2), { nullable: false });
+      table.columns.add("Sesenta_Dias", sql.Decimal(18, 2), { nullable: false });
+      table.columns.add("Noventa_Dias", sql.Decimal(18, 2), { nullable: false });
+      table.columns.add("Mas_de_Noventa", sql.Decimal(18, 2), { nullable: false });
       table.columns.add("UpdatedAt", sql.DateTime2(0), { nullable: false });
 
       for (const it of items) {
         const numFactura = pickString(it, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "—";
         const iden = pickString(it, ["iden", "Identificacion", "identificacion"]) || "—";
         const cliente = pickString(it, ["cliente", "Cliente", "CLIENTE"]) || null;
-        const venc = parseDate(pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"])) || null;
+        const fechafac =
+          parseDateTime2(pickString(it, ["fechafac", "FechaFac", "fecha_fac", "Fecha_Fac"])) || null;
+        const anomes = pickString(it, ["anomes", "AnoMes", "ANO MES", "ano_mes", "Ano_Mes"]) || null;
+        const cuota = pickNumber(it, ["cuota", "Cuota"]) ?? null;
+        const venc = parseDate(pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"])) || "1900-01-01";
         const diasRaw = pickString(it, ["dias", "Dias", "dias_mora", "DiasMora"]);
         const dias = diasRaw ? Number.parseInt(diasRaw, 10) : null;
-        const saldo = getSaldo(it) ?? 0;
-        const cuota = getCuota(it) ?? 0;
-        const monto = getMonto(it) ?? 0;
+        const porVencer = getPorVencer(it);
+        const treinta = getTreinta(it);
+        const sesenta = getSesenta(it);
+        const noventa = getNoventa(it);
+        const masNoventa = getMasNoventa(it);
         table.rows.add(
           empresaId,
           numFactura,
           iden,
           cliente,
+          fechafac,
+          anomes,
+          Number.isFinite(cuota) ? Math.trunc(cuota) : null,
           venc,
           Number.isFinite(dias) ? dias : null,
-          saldo,
-          cuota,
-          monto,
+          porVencer,
+          treinta,
+          sesenta,
+          noventa,
+          masNoventa,
           lastSyncAt
         );
       }

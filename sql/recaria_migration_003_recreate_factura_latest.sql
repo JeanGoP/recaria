@@ -1,22 +1,7 @@
-CREATE TABLE dbo.Empresa (
-  EmpresaId INT IDENTITY(1,1) NOT NULL,
-  TokenHash CHAR(64) NOT NULL,
-  CreatedAt DATETIME2(0) NOT NULL CONSTRAINT DF_Empresa_CreatedAt DEFAULT (SYSUTCDATETIME()),
-  CONSTRAINT PK_Empresa PRIMARY KEY CLUSTERED (EmpresaId),
-  CONSTRAINT UQ_Empresa_TokenHash UNIQUE (TokenHash)
-);
-
-CREATE TABLE dbo.CarteraLatestMeta (
-  EmpresaId INT NOT NULL,
-  LastSyncAt DATETIME2(0) NULL,
-  LastSyncOk BIT NOT NULL CONSTRAINT DF_CarteraLatestMeta_LastSyncOk DEFAULT (0),
-  LastSyncCount INT NULL,
-  LastSyncTotalMonto DECIMAL(18, 2) NULL,
-  LastError NVARCHAR(4000) NULL,
-  LastPayloadJson NVARCHAR(MAX) NULL,
-  CONSTRAINT PK_CarteraLatestMeta PRIMARY KEY CLUSTERED (EmpresaId),
-  CONSTRAINT FK_CarteraLatestMeta_Empresa FOREIGN KEY (EmpresaId) REFERENCES dbo.Empresa(EmpresaId)
-);
+IF OBJECT_ID('dbo.CarteraFacturaLatest', 'U') IS NOT NULL
+BEGIN
+  DROP TABLE dbo.CarteraFacturaLatest;
+END
 
 CREATE TABLE dbo.CarteraFacturaLatest (
   EmpresaId INT NOT NULL,
@@ -41,3 +26,4 @@ CREATE TABLE dbo.CarteraFacturaLatest (
 CREATE INDEX IX_CarteraFacturaLatest_EmpresaId ON dbo.CarteraFacturaLatest (EmpresaId);
 CREATE INDEX IX_CarteraFacturaLatest_Dias ON dbo.CarteraFacturaLatest (EmpresaId, Dias);
 CREATE INDEX IX_CarteraFacturaLatest_Vencimiento ON dbo.CarteraFacturaLatest (EmpresaId, Vencimiento);
+
