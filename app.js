@@ -110,9 +110,27 @@ const getMonto = (item) => {
 
   if (direct !== null) return direct;
 
+  const hasAgingBuckets =
+    item &&
+    (Object.prototype.hasOwnProperty.call(item, "PorVencer") ||
+      Object.prototype.hasOwnProperty.call(item, "Treinta_Dias") ||
+      Object.prototype.hasOwnProperty.call(item, "sesenta_Dias") ||
+      Object.prototype.hasOwnProperty.call(item, "noventa_Dias") ||
+      Object.prototype.hasOwnProperty.call(item, "Mas_de_Noventa"));
+
+  if (hasAgingBuckets) {
+    const porVencer = pickNumber(item, ["PorVencer", "porvencer", "Por_Vencer", "por_vencer"]) ?? 0;
+    const treinta = pickNumber(item, ["Treinta_Dias", "treinta_dias", "TreintaDias", "treintadias"]) ?? 0;
+    const sesenta = pickNumber(item, ["sesenta_Dias", "Sesenta_Dias", "sesenta_dias", "SesentaDias", "sesentadias"]) ?? 0;
+    const noventa = pickNumber(item, ["noventa_Dias", "Noventa_Dias", "noventa_dias", "NoventaDias", "noventadias"]) ?? 0;
+    const masNoventa =
+      pickNumber(item, ["Mas_de_Noventa", "mas_de_noventa", "MasDeNoventa", "Mas_De_Noventa", "masdenoventa"]) ?? 0;
+    return porVencer + treinta + sesenta + noventa + masNoventa;
+  }
+
   const bucketCandidates = Object.entries(item || {})
     .filter(([key, value]) => {
-      if (!/(vencer|treinta|sesenta|noventa|ciento|dias)/i.test(key)) return false;
+      if (!/(vencer|treinta|sesenta|noventa|ciento)/i.test(key)) return false;
       return toNumber(value) !== null;
     })
     .map(([, value]) => toNumber(value))
