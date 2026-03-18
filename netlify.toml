@@ -1,0 +1,5 @@
+[build]
+  publish = "."
+  command = "echo \"no build\""
+  functions = "netlify/functions"
+

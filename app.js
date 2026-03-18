@@ -614,7 +614,7 @@ const init = () => {
     setLoading(true);
     try {
       const endpoint = useProxy
-        ? "/.netlify/functions/cartera"
+        ? "/.netlify/functions/sync"
         : (() => {
             const url = new URL(String(configApiUrl));
             url.searchParams.set("token", String(configToken));
@@ -644,7 +644,17 @@ const init = () => {
       });
 
       if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+        const text = await resp.text().catch(() => "");
+        let message = `HTTP ${resp.status} ${resp.statusText}`;
+        try {
+          const parsed = text ? JSON.parse(text) : null;
+          if (parsed?.Mensaje) message = String(parsed.Mensaje);
+          else if (parsed?.message) message = String(parsed.message);
+          else if (text) message = String(text).slice(0, 500);
+        } catch {
+          if (text) message = String(text).slice(0, 500);
+        }
+        throw new Error(message);
       }
 
       const data = await resp.json();
