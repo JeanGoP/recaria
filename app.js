@@ -15,6 +15,9 @@ const STORAGE_KEYS = {
   lcPhoneField: "collectai.lc.phoneField",
   lcTagPorVencer: "collectai.lc.tagPorVencer",
   lcTagCobro: "collectai.lc.tagCobro",
+  lcFromNumber: "collectai.lc.fromNumber",
+  lcTplPorVencer: "collectai.lc.tplPorVencer",
+  lcTplCobro: "collectai.lc.tplCobro",
   lcAuto: "collectai.lc.auto",
   lcMax: "collectai.lc.max",
 };
@@ -232,8 +235,11 @@ const init = () => {
   const configLcTokenInput = document.getElementById("configLcToken");
   const configLcLocationIdInput = document.getElementById("configLcLocationId");
   const configLcPhoneFieldInput = document.getElementById("configLcPhoneField");
+  const configLcFromNumberInput = document.getElementById("configLcFromNumber");
   const configLcTagPorVencerInput = document.getElementById("configLcTagPorVencer");
   const configLcTagCobroInput = document.getElementById("configLcTagCobro");
+  const configLcTplPorVencerInput = document.getElementById("configLcTplPorVencer");
+  const configLcTplCobroInput = document.getElementById("configLcTplCobro");
   const configLcAutoInput = document.getElementById("configLcAuto");
   const configLcMaxInput = document.getElementById("configLcMax");
   const scheduleNextRunEl = document.getElementById("scheduleNextRun");
@@ -280,6 +286,13 @@ const init = () => {
   const storedLcPhoneField = window.localStorage.getItem(STORAGE_KEYS.lcPhoneField) || "telefono";
   const storedLcTagPorVencer = window.localStorage.getItem(STORAGE_KEYS.lcTagPorVencer) || "recarIA_por_vencer";
   const storedLcTagCobro = window.localStorage.getItem(STORAGE_KEYS.lcTagCobro) || "recarIA_cobro";
+  const storedLcFromNumber = window.localStorage.getItem(STORAGE_KEYS.lcFromNumber) || "";
+  const storedLcTplPorVencer =
+    window.localStorage.getItem(STORAGE_KEYS.lcTplPorVencer) ||
+    "Hola {nombre}, te recordamos que tienes un vencimiento el {vencimiento} por {saldo} (Factura {factura}).";
+  const storedLcTplCobro =
+    window.localStorage.getItem(STORAGE_KEYS.lcTplCobro) ||
+    "Hola {nombre}, tu factura {factura} venció el {vencimiento} hace {dias} días. Saldo pendiente: {saldo}.";
   const storedLcAuto = window.localStorage.getItem(STORAGE_KEYS.lcAuto) === "1";
   const storedLcMaxRaw = window.localStorage.getItem(STORAGE_KEYS.lcMax) || "50";
   const storedLcMax = Number.isFinite(Number(storedLcMaxRaw)) ? Math.trunc(Number(storedLcMaxRaw)) : 50;
@@ -305,6 +318,9 @@ const init = () => {
   let lcPhoneField = storedLcPhoneField;
   let lcTagPorVencer = storedLcTagPorVencer;
   let lcTagCobro = storedLcTagCobro;
+  let lcFromNumber = storedLcFromNumber;
+  let lcTplPorVencer = storedLcTplPorVencer;
+  let lcTplCobro = storedLcTplCobro;
   let lcAuto = storedLcAuto;
   let lcMax = storedLcMax;
 
@@ -456,8 +472,11 @@ const init = () => {
   if (configLcTokenInput) configLcTokenInput.value = lcToken;
   if (configLcLocationIdInput) configLcLocationIdInput.value = lcLocationId;
   if (configLcPhoneFieldInput) configLcPhoneFieldInput.value = lcPhoneField;
+  if (configLcFromNumberInput) configLcFromNumberInput.value = lcFromNumber;
   if (configLcTagPorVencerInput) configLcTagPorVencerInput.value = lcTagPorVencer;
   if (configLcTagCobroInput) configLcTagCobroInput.value = lcTagCobro;
+  if (configLcTplPorVencerInput) configLcTplPorVencerInput.value = lcTplPorVencer;
+  if (configLcTplCobroInput) configLcTplCobroInput.value = lcTplCobro;
   if (configLcAutoInput) configLcAutoInput.checked = lcAuto;
   if (configLcMaxInput) configLcMaxInput.value = String(lcMax || 50);
   refreshConfigUi();
@@ -487,7 +506,12 @@ const init = () => {
     return pickString(item, ["email", "Email", "correo", "Correo", "mail", "Mail"]) || "";
   };
 
-  const buildContacts = ({ mode }) => {
+  const renderTemplate = (tpl, vars) => {
+    const s = String(tpl || "");
+    return s.replace(/\{(\w+)\}/g, (_, key) => (vars && vars[key] !== undefined && vars[key] !== null ? String(vars[key]) : ""));
+  };
+
+  const buildMessages = ({ mode }) => {
     const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
     const tag = mode === "porVencer" ? String(lcTagPorVencer || "").trim() : String(lcTagCobro || "").trim();
     const wanted = [];
@@ -515,17 +539,30 @@ const init = () => {
 
       const name = pickString(it, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
       const email = getEmail(it);
-      const contact = {
+      const factura = pickString(it, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "";
+      const vencimiento = pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
+      const saldo = getMonto(it);
+      const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
+      const msg = renderTemplate(tpl, {
+        nombre: name,
+        factura,
+        vencimiento,
+        dias: String(Math.abs(dias)),
+        saldo: formatCOP(saldo),
+      }).trim();
+
+      const payload = {
         name,
-        phone,
+        toNumber: phone,
+        message: msg,
       };
-      if (email) contact.email = email;
-      if (tag) contact.tags = [tag];
-      wanted.push(contact);
+      if (email) payload.email = email;
+      if (tag) payload.tags = [tag];
+      wanted.push(payload);
       if (wanted.length >= maxLocal) break;
     }
 
-    return { contacts: wanted, missingPhone };
+    return { messages: wanted, missingPhone };
   };
 
   const sendToLeadConnector = async ({ mode, test }) => {
@@ -534,10 +571,14 @@ const init = () => {
       return { ok: false, error: "no_config" };
     }
 
-    const version = "2021-07-28";
     const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
 
-    let contacts = [];
+    if (!String(lcFromNumber || "").trim()) {
+      setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
+      return { ok: false, error: "no_from" };
+    }
+
+    let messages = [];
     let missingPhone = 0;
     if (test) {
       const first = currentItems[0];
@@ -552,30 +593,45 @@ const init = () => {
       }
       const name = pickString(first, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
       const email = getEmail(first);
-      const contact = { name, phone };
-      if (email) contact.email = email;
-      contacts = [contact];
+      const factura = pickString(first, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "";
+      const vencimiento = pickString(first, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
+      const dias = getDias(first) ?? 0;
+      const saldo = getMonto(first);
+      const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
+      const msg = renderTemplate(tpl, {
+        nombre: name,
+        factura,
+        vencimiento,
+        dias: String(Math.abs(dias)),
+        saldo: formatCOP(saldo),
+      }).trim();
+
+      const payload = { name, toNumber: phone, message: msg };
+      if (email) payload.email = email;
+      messages = [payload];
     } else {
-      const built = buildContacts({ mode });
-      contacts = built.contacts;
+      const built = buildMessages({ mode });
+      messages = built.messages;
       missingPhone = built.missingPhone;
     }
 
-    if (contacts.length === 0) {
+    if (messages.length === 0) {
       setConfigStatus(missingPhone ? `Sin teléfonos para enviar (${missingPhone} sin teléfono).` : "No hay contactos para enviar.");
       return { ok: true, sent: 0, failed: 0 };
     }
 
-    setConfigStatus(`Enviando WhatsApp (${contacts.length}${missingPhone ? ` • ${missingPhone} sin teléfono` : ""})…`);
+    setConfigStatus(`Enviando WhatsApp (${messages.length}${missingPhone ? ` • ${missingPhone} sin teléfono` : ""})…`);
 
     const resp = await fetch("/.netlify/functions/leadconnector", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
+        action: "sendWhatsApp",
         token: lcToken,
         locationId: lcLocationId,
-        version,
-        contacts,
+        fromNumber: lcFromNumber,
+        versionMsg: "2021-04-15",
+        messages,
         max: maxLocal,
       }),
     });
@@ -1003,8 +1059,11 @@ const init = () => {
       if (configLcTokenInput) lcToken = String(configLcTokenInput.value || "").trim();
       if (configLcLocationIdInput) lcLocationId = String(configLcLocationIdInput.value || "").trim();
       if (configLcPhoneFieldInput) lcPhoneField = String(configLcPhoneFieldInput.value || "").trim() || "telefono";
+      if (configLcFromNumberInput) lcFromNumber = String(configLcFromNumberInput.value || "").trim();
       if (configLcTagPorVencerInput) lcTagPorVencer = String(configLcTagPorVencerInput.value || "").trim() || "recarIA_por_vencer";
       if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
+      if (configLcTplPorVencerInput) lcTplPorVencer = String(configLcTplPorVencerInput.value || "").trim() || storedLcTplPorVencer;
+      if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
       if (configLcAutoInput) lcAuto = Boolean(configLcAutoInput.checked);
       if (configLcMaxInput) {
         const n = Number(configLcMaxInput.value);
@@ -1014,8 +1073,11 @@ const init = () => {
       window.localStorage.setItem(STORAGE_KEYS.lcToken, lcToken);
       window.localStorage.setItem(STORAGE_KEYS.lcLocationId, lcLocationId);
       window.localStorage.setItem(STORAGE_KEYS.lcPhoneField, lcPhoneField);
+      window.localStorage.setItem(STORAGE_KEYS.lcFromNumber, lcFromNumber);
       window.localStorage.setItem(STORAGE_KEYS.lcTagPorVencer, lcTagPorVencer);
       window.localStorage.setItem(STORAGE_KEYS.lcTagCobro, lcTagCobro);
+      window.localStorage.setItem(STORAGE_KEYS.lcTplPorVencer, lcTplPorVencer);
+      window.localStorage.setItem(STORAGE_KEYS.lcTplCobro, lcTplCobro);
       window.localStorage.setItem(STORAGE_KEYS.lcAuto, lcAuto ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.lcMax, String(lcMax));
 
