@@ -663,7 +663,8 @@ const init = () => {
     const sent = Number(json?.sent ?? 0);
     const failed = Number(json?.failed ?? 0);
     const trunc = Boolean(json?.truncated);
-    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}`);
+    const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
+    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}${contactId ? ` • contactId ${contactId}` : ""}`);
     return { ok: failed === 0, sent, failed };
   };
 
@@ -721,7 +722,8 @@ const init = () => {
 
     const sent = Number(json?.sent ?? 0);
     const failed = Number(json?.failed ?? 0);
-    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error`);
+    const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
+    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${contactId ? ` • contactId ${contactId}` : ""}`);
   };
 
   const render = () => {
