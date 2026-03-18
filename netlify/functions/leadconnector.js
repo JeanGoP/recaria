@@ -201,7 +201,14 @@ export async function handler(event) {
         }
 
         sent += 1;
-        results.push({ ok: true, status: msgRes.status, body: msgRes.text, contactId });
+        results.push({
+          ok: true,
+          status: msgRes.status,
+          body: msgRes.text,
+          contactId,
+          toNumber,
+          fromNumber,
+        });
       } catch (err) {
         failed += 1;
         results.push({ ok: false, status: 0, body: String(err?.message || err || "Error enviando") });

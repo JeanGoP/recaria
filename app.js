@@ -244,6 +244,7 @@ const init = () => {
   const configLcTestToNumberInput = document.getElementById("configLcTestToNumber");
   const configLcAutoInput = document.getElementById("configLcAuto");
   const configLcMaxInput = document.getElementById("configLcMax");
+  const configDebugEl = document.getElementById("configDebug");
   const scheduleNextRunEl = document.getElementById("scheduleNextRun");
   const scheduleLastRunEl = document.getElementById("scheduleLastRun");
   const runNowBtn = document.getElementById("runNow");
@@ -390,6 +391,23 @@ const init = () => {
   const setConfigStatus = (text) => {
     if (!configStatusEl) return;
     configStatusEl.textContent = text;
+  };
+
+  const setConfigDebug = (value) => {
+    if (!configDebugEl) return;
+    if (value === null || value === undefined) {
+      configDebugEl.textContent = "—";
+      return;
+    }
+    if (typeof value === "string") {
+      configDebugEl.textContent = value || "—";
+      return;
+    }
+    try {
+      configDebugEl.textContent = JSON.stringify(value, null, 2);
+    } catch {
+      configDebugEl.textContent = String(value);
+    }
   };
 
   const parseTimeMinutes = (hhmm) => {
@@ -632,6 +650,7 @@ const init = () => {
     }
 
     setConfigStatus(`Enviando WhatsApp (${messages.length}${missingPhone ? ` • ${missingPhone} sin teléfono` : ""})…`);
+    setConfigDebug("—");
 
     const resp = await fetch("/.netlify/functions/leadconnector", {
       method: "POST",
@@ -657,6 +676,7 @@ const init = () => {
 
     if (!resp.ok) {
       setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+      setConfigDebug(text || `HTTP ${resp.status}`);
       return { ok: false, error: text || `HTTP ${resp.status}` };
     }
 
@@ -665,6 +685,7 @@ const init = () => {
     const trunc = Boolean(json?.truncated);
     const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
     setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}${contactId ? ` • contactId ${contactId}` : ""}`);
+    setConfigDebug(json || text);
     return { ok: failed === 0, sent, failed };
   };
 
@@ -686,6 +707,7 @@ const init = () => {
     }
 
     setConfigStatus(`Enviando WhatsApp a ${to}…`);
+    setConfigDebug("—");
 
     const resp = await fetch("/.netlify/functions/leadconnector", {
       method: "POST",
@@ -717,6 +739,7 @@ const init = () => {
 
     if (!resp.ok) {
       setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+      setConfigDebug(text || `HTTP ${resp.status}`);
       return;
     }
 
@@ -724,6 +747,7 @@ const init = () => {
     const failed = Number(json?.failed ?? 0);
     const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
     setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${contactId ? ` • contactId ${contactId}` : ""}`);
+    setConfigDebug(json || text);
   };
 
   const render = () => {
