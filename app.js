@@ -19,6 +19,10 @@ const STORAGE_KEYS = {
   lcTplPorVencer: "collectai.lc.tplPorVencer",
   lcTplCobro: "collectai.lc.tplCobro",
   lcTestToNumber: "collectai.lc.testToNumber",
+  lcUseTemplate: "collectai.lc.useTemplate",
+  lcTemplateName: "collectai.lc.template.name",
+  lcTemplateLang: "collectai.lc.template.lang",
+  lcTemplateBody: "collectai.lc.template.body",
   lcAuto: "collectai.lc.auto",
   lcMax: "collectai.lc.max",
 };
@@ -241,6 +245,10 @@ const init = () => {
   const configLcTagCobroInput = document.getElementById("configLcTagCobro");
   const configLcTplPorVencerInput = document.getElementById("configLcTplPorVencer");
   const configLcTplCobroInput = document.getElementById("configLcTplCobro");
+  const configLcUseTemplateInput = document.getElementById("configLcUseTemplate");
+  const configLcTemplateNameInput = document.getElementById("configLcTemplateName");
+  const configLcTemplateLangInput = document.getElementById("configLcTemplateLang");
+  const configLcTemplateBodyInput = document.getElementById("configLcTemplateBody");
   const configLcTestToNumberInput = document.getElementById("configLcTestToNumber");
   const configLcAutoInput = document.getElementById("configLcAuto");
   const configLcMaxInput = document.getElementById("configLcMax");
@@ -298,6 +306,10 @@ const init = () => {
     window.localStorage.getItem(STORAGE_KEYS.lcTplCobro) ||
     "Hola {nombre}, tu factura {factura} venció el {vencimiento} hace {dias} días. Saldo pendiente: {saldo}.";
   const storedLcTestToNumber = window.localStorage.getItem(STORAGE_KEYS.lcTestToNumber) || "";
+  const storedLcUseTemplate = window.localStorage.getItem(STORAGE_KEYS.lcUseTemplate) === "1";
+  const storedLcTemplateName = window.localStorage.getItem(STORAGE_KEYS.lcTemplateName) || "";
+  const storedLcTemplateLang = window.localStorage.getItem(STORAGE_KEYS.lcTemplateLang) || "es_MX";
+  const storedLcTemplateBody = window.localStorage.getItem(STORAGE_KEYS.lcTemplateBody) || "";
   const storedLcAuto = window.localStorage.getItem(STORAGE_KEYS.lcAuto) === "1";
   const storedLcMaxRaw = window.localStorage.getItem(STORAGE_KEYS.lcMax) || "50";
   const storedLcMax = Number.isFinite(Number(storedLcMaxRaw)) ? Math.trunc(Number(storedLcMaxRaw)) : 50;
@@ -327,6 +339,10 @@ const init = () => {
   let lcTplPorVencer = storedLcTplPorVencer;
   let lcTplCobro = storedLcTplCobro;
   let lcTestToNumber = storedLcTestToNumber;
+  let lcUseTemplate = storedLcUseTemplate;
+  let lcTemplateName = storedLcTemplateName;
+  let lcTemplateLang = storedLcTemplateLang;
+  let lcTemplateBody = storedLcTemplateBody;
   let lcAuto = storedLcAuto;
   let lcMax = storedLcMax;
 
@@ -505,6 +521,10 @@ const init = () => {
   if (configLcTagCobroInput) configLcTagCobroInput.value = lcTagCobro;
   if (configLcTplPorVencerInput) configLcTplPorVencerInput.value = lcTplPorVencer;
   if (configLcTplCobroInput) configLcTplCobroInput.value = lcTplCobro;
+  if (configLcUseTemplateInput) configLcUseTemplateInput.checked = lcUseTemplate;
+  if (configLcTemplateNameInput) configLcTemplateNameInput.value = lcTemplateName;
+  if (configLcTemplateLangInput) configLcTemplateLangInput.value = lcTemplateLang;
+  if (configLcTemplateBodyInput) configLcTemplateBodyInput.value = lcTemplateBody;
   if (configLcTestToNumberInput) configLcTestToNumberInput.value = lcTestToNumber;
   if (configLcAutoInput) configLcAutoInput.checked = lcAuto;
   if (configLcMaxInput) configLcMaxInput.value = String(lcMax || 50);
@@ -540,6 +560,32 @@ const init = () => {
     return s.replace(/\{(\w+)\}/g, (_, key) => (vars && vars[key] !== undefined && vars[key] !== null ? String(vars[key]) : ""));
   };
 
+  const templateIsEnabled = () => {
+    return Boolean(lcUseTemplate && String(lcTemplateName || "").trim());
+  };
+
+  const parseLines = (raw) => {
+    return String(raw || "")
+      .split(/\r?\n/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  const buildTemplatePayload = ({ vars }) => {
+    if (!templateIsEnabled()) return null;
+    const name = String(lcTemplateName || "").trim();
+    const lang = String(lcTemplateLang || "").trim() || "es_MX";
+    const body = parseLines(lcTemplateBody).map((line) => renderTemplate(line, vars));
+    return {
+      MessageType: 19,
+      whatsapp: {
+        type: "template",
+        template: { name, lang },
+        placeholders: { header: [], body, buttons: [] },
+      },
+    };
+  };
+
   const buildMessages = ({ mode }) => {
     const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
     const tag = mode === "porVencer" ? String(lcTagPorVencer || "").trim() : String(lcTagCobro || "").trim();
@@ -572,13 +618,8 @@ const init = () => {
       const vencimiento = pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
       const saldo = getMonto(it);
       const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
-      const msg = renderTemplate(tpl, {
-        nombre: name,
-        factura,
-        vencimiento,
-        dias: String(Math.abs(dias)),
-        saldo: formatCOP(saldo),
-      }).trim();
+      const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
+      const msg = renderTemplate(tpl, vars).trim();
 
       const payload = {
         name,
@@ -587,6 +628,8 @@ const init = () => {
       };
       if (email) payload.email = email;
       if (tag) payload.tags = [tag];
+      const tplPayload = buildTemplatePayload({ vars });
+      if (tplPayload) Object.assign(payload, tplPayload);
       wanted.push(payload);
       if (wanted.length >= maxLocal) break;
     }
@@ -601,6 +644,11 @@ const init = () => {
     }
 
     const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
+
+    if (lcUseTemplate && !templateIsEnabled()) {
+      setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
+      return { ok: false, error: "no_template" };
+    }
 
     if (!String(lcFromNumber || "").trim()) {
       setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
@@ -627,16 +675,13 @@ const init = () => {
       const dias = getDias(first) ?? 0;
       const saldo = getMonto(first);
       const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
-      const msg = renderTemplate(tpl, {
-        nombre: name,
-        factura,
-        vencimiento,
-        dias: String(Math.abs(dias)),
-        saldo: formatCOP(saldo),
-      }).trim();
+      const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
+      const msg = renderTemplate(tpl, vars).trim();
 
       const payload = { name, toNumber: phone, message: msg };
       if (email) payload.email = email;
+      const tplPayload = buildTemplatePayload({ vars });
+      if (tplPayload) Object.assign(payload, tplPayload);
       messages = [payload];
     } else {
       const built = buildMessages({ mode });
@@ -701,6 +746,11 @@ const init = () => {
       return;
     }
 
+    if (lcUseTemplate && !templateIsEnabled()) {
+      setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
+      return;
+    }
+
     if (!String(lcFromNumber || "").trim()) {
       setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
       return;
@@ -708,6 +758,11 @@ const init = () => {
 
     setConfigStatus(`Enviando WhatsApp a ${to}…`);
     setConfigDebug("—");
+
+    const vars = { nombre: "Prueba", factura: "", vencimiento: "", dias: "0", saldo: "" };
+    const msgPayload = { name: "Prueba", toNumber: to, message: lcTplPorVencer || "Prueba" };
+    const tplPayload = buildTemplatePayload({ vars });
+    if (tplPayload) Object.assign(msgPayload, tplPayload);
 
     const resp = await fetch("/.netlify/functions/leadconnector", {
       method: "POST",
@@ -718,13 +773,7 @@ const init = () => {
         locationId: lcLocationId,
         fromNumber: lcFromNumber,
         versionMsg: "2021-04-15",
-        messages: [
-          {
-            name: "Prueba",
-            toNumber: to,
-            message: "Prueba",
-          },
-        ],
+        messages: [msgPayload],
         max: 1,
       }),
     });
@@ -1158,6 +1207,10 @@ const init = () => {
       if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
       if (configLcTplPorVencerInput) lcTplPorVencer = String(configLcTplPorVencerInput.value || "").trim() || storedLcTplPorVencer;
       if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
+      if (configLcUseTemplateInput) lcUseTemplate = Boolean(configLcUseTemplateInput.checked);
+      if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
+      if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es_MX";
+      if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
       if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
       if (configLcAutoInput) lcAuto = Boolean(configLcAutoInput.checked);
       if (configLcMaxInput) {
@@ -1174,6 +1227,10 @@ const init = () => {
       window.localStorage.setItem(STORAGE_KEYS.lcTplPorVencer, lcTplPorVencer);
       window.localStorage.setItem(STORAGE_KEYS.lcTplCobro, lcTplCobro);
       window.localStorage.setItem(STORAGE_KEYS.lcTestToNumber, lcTestToNumber);
+      window.localStorage.setItem(STORAGE_KEYS.lcUseTemplate, lcUseTemplate ? "1" : "0");
+      window.localStorage.setItem(STORAGE_KEYS.lcTemplateName, lcTemplateName);
+      window.localStorage.setItem(STORAGE_KEYS.lcTemplateLang, lcTemplateLang);
+      window.localStorage.setItem(STORAGE_KEYS.lcTemplateBody, lcTemplateBody);
       window.localStorage.setItem(STORAGE_KEYS.lcAuto, lcAuto ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.lcMax, String(lcMax));
 

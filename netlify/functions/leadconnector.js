@@ -181,6 +181,10 @@ export async function handler(event) {
           fromNumber,
           toNumber,
         };
+        const messageTypeRaw = m?.MessageType ?? m?.messageType ?? null;
+        const messageTypeNum = Number.isFinite(Number(messageTypeRaw)) ? Math.trunc(Number(messageTypeRaw)) : null;
+        if (messageTypeNum !== null) msgPayload.MessageType = messageTypeNum;
+        if (m?.whatsapp && typeof m.whatsapp === "object") msgPayload.whatsapp = m.whatsapp;
 
         const msgRes = await postJson({
           url: "https://services.leadconnectorhq.com/conversations/messages",
