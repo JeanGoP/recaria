@@ -53,14 +53,37 @@ const pickString = (obj, keys) => {
   return "";
 };
 
+const parseNumber = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  let s = String(value).trim();
+  if (!s) return null;
+  s = s.replace(/\s+/g, "");
+  s = s.replace(/[^\d.,-]/g, "");
+
+  const hasDot = s.includes(".");
+  const hasComma = s.includes(",");
+
+  if (hasDot && hasComma) {
+    s = s.replace(/\./g, "");
+    s = s.replace(/,/g, ".");
+  } else if (hasComma && !hasDot) {
+    s = s.replace(/,/g, ".");
+  }
+
+  const n = Number.parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+};
+
 const pickNumber = (obj, keys) => {
   for (const k of keys) {
     const v = obj?.[k];
     if (v === null || v === undefined) continue;
-    const n = typeof v === "number" ? v : Number.parseFloat(String(v).replace(/,/g, "."));
-    if (Number.isFinite(n)) return n;
+    const n = parseNumber(v);
+    if (n !== null) return n;
   }
-  return 0;
+  return null;
 };
 
 const parseDate = (value) => {
@@ -150,7 +173,28 @@ export async function handler(event) {
   }
   const items = Array.from(uniq.values());
 
-  const totalMonto = items.reduce((acc, it) => acc + pickNumber(it, ["monto", "Monto", "saldo", "Saldo", "valor", "Valor"]), 0);
+  const getSaldo = (it) => {
+    return (
+      pickNumber(it, ["saldo", "Saldo", "saldo_cuota", "Saldo_Cuota", "saldoCuota", "SaldoCuota", "SaldoFactura", "Saldo_Factura"]) ??
+      null
+    );
+  };
+
+  const getCuota = (it) => {
+    return (
+      pickNumber(it, ["cuota", "Cuota", "valor_cuota", "Valor_Cuota", "valorCuota", "ValorCuota", "valorcuota"]) ?? null
+    );
+  };
+
+  const getMonto = (it) => {
+    return pickNumber(it, ["monto", "Monto", "valor", "Valor", "monto_cuota", "Monto_Cuota"]) ?? null;
+  };
+
+  const totalMonto = items.reduce((acc, it) => {
+    const saldo = getSaldo(it);
+    const monto = getMonto(it);
+    return acc + (saldo ?? monto ?? 0);
+  }, 0);
 
   let empresaId = null;
   const now = new Date();
@@ -190,6 +234,8 @@ export async function handler(event) {
       table.columns.add("Cliente", sql.NVarChar(256), { nullable: true });
       table.columns.add("Vencimiento", sql.Date, { nullable: true });
       table.columns.add("Dias", sql.Int, { nullable: true });
+      table.columns.add("Saldo", sql.Decimal(18, 2), { nullable: false });
+      table.columns.add("Cuota", sql.Decimal(18, 2), { nullable: false });
       table.columns.add("Monto", sql.Decimal(18, 2), { nullable: false });
       table.columns.add("UpdatedAt", sql.DateTime2(0), { nullable: false });
 
@@ -200,8 +246,21 @@ export async function handler(event) {
         const venc = parseDate(pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"])) || null;
         const diasRaw = pickString(it, ["dias", "Dias", "dias_mora", "DiasMora"]);
         const dias = diasRaw ? Number.parseInt(diasRaw, 10) : null;
-        const monto = pickNumber(it, ["monto", "Monto", "saldo", "Saldo", "valor", "Valor"]);
-        table.rows.add(empresaId, numFactura, iden, cliente, venc, Number.isFinite(dias) ? dias : null, monto, lastSyncAt);
+        const saldo = getSaldo(it) ?? 0;
+        const cuota = getCuota(it) ?? 0;
+        const monto = getMonto(it) ?? 0;
+        table.rows.add(
+          empresaId,
+          numFactura,
+          iden,
+          cliente,
+          venc,
+          Number.isFinite(dias) ? dias : null,
+          saldo,
+          cuota,
+          monto,
+          lastSyncAt
+        );
       }
 
       const reqBulk = new sql.Request(tx);

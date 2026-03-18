@@ -25,6 +25,8 @@ CREATE TABLE dbo.CarteraFacturaLatest (
   Cliente NVARCHAR(256) NULL,
   Vencimiento DATE NULL,
   Dias INT NULL,
+  Saldo DECIMAL(18, 2) NOT NULL CONSTRAINT DF_CarteraFacturaLatest_Saldo DEFAULT (0),
+  Cuota DECIMAL(18, 2) NOT NULL CONSTRAINT DF_CarteraFacturaLatest_Cuota DEFAULT (0),
   Monto DECIMAL(18, 2) NOT NULL CONSTRAINT DF_CarteraFacturaLatest_Monto DEFAULT (0),
   UpdatedAt DATETIME2(0) NOT NULL CONSTRAINT DF_CarteraFacturaLatest_UpdatedAt DEFAULT (SYSUTCDATETIME()),
   CONSTRAINT PK_CarteraFacturaLatest PRIMARY KEY CLUSTERED (EmpresaId, NumFactura, Identificacion),
