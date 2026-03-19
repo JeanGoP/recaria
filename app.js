@@ -455,7 +455,23 @@ const init = () => {
     return run;
   };
 
+  const syncLcFromInputs = () => {
+    if (configLcTokenInput) lcToken = String(configLcTokenInput.value || "").trim();
+    if (configLcLocationIdInput) lcLocationId = String(configLcLocationIdInput.value || "").trim();
+    if (configLcFromNumberInput) lcFromNumber = String(configLcFromNumberInput.value || "").trim();
+    if (configLcTagPorVencerInput) lcTagPorVencer = String(configLcTagPorVencerInput.value || "").trim() || "recarIA_por_vencer";
+    if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
+    if (configLcTplPorVencerInput) lcTplPorVencer = String(configLcTplPorVencerInput.value || "").trim() || storedLcTplPorVencer;
+    if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
+    if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
+    if (configLcUseTemplateInput) lcUseTemplate = Boolean(configLcUseTemplateInput.checked);
+    if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
+    if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es_MX";
+    if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
+  };
+
   const refreshScheduleUi = () => {
+    syncLcFromInputs();
     if (scheduleNextRunEl) {
       if (!scheduleEnabled) {
         scheduleNextRunEl.textContent = "Programación desactivada";
@@ -529,6 +545,21 @@ const init = () => {
   if (configLcAutoInput) configLcAutoInput.checked = lcAuto;
   if (configLcMaxInput) configLcMaxInput.value = String(lcMax || 50);
   refreshConfigUi();
+
+  const wireRefresh = (el) => {
+    if (!el) return;
+    el.addEventListener("input", () => refreshScheduleUi());
+    el.addEventListener("change", () => refreshScheduleUi());
+  };
+
+  wireRefresh(configLcTokenInput);
+  wireRefresh(configLcLocationIdInput);
+  wireRefresh(configLcFromNumberInput);
+  wireRefresh(configLcTestToNumberInput);
+  wireRefresh(configLcUseTemplateInput);
+  wireRefresh(configLcTemplateNameInput);
+  wireRefresh(configLcTemplateLangInput);
+  wireRefresh(configLcTemplateBodyInput);
 
   const normalizePhone = (raw) => {
     const s = String(raw || "").trim();
@@ -638,165 +669,176 @@ const init = () => {
   };
 
   const sendToLeadConnector = async ({ mode, test }) => {
-    if (!isWhatsAppConfigured()) {
-      setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
-      return { ok: false, error: "no_config" };
-    }
-
-    const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
-
-    if (lcUseTemplate && !templateIsEnabled()) {
-      setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
-      return { ok: false, error: "no_template" };
-    }
-
-    if (!String(lcFromNumber || "").trim()) {
-      setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
-      return { ok: false, error: "no_from" };
-    }
-
-    let messages = [];
-    let missingPhone = 0;
-    if (test) {
-      const first = currentItems[0];
-      if (!first) {
-        setConfigStatus("No hay datos cargados para probar.");
-        return { ok: false, error: "no_data" };
-      }
-      const phone = getPhone(first);
-      if (!phone) {
-        setConfigStatus("No se encontró teléfono en el primer registro.");
-        return { ok: false, error: "no_phone" };
-      }
-      const name = pickString(first, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
-      const email = getEmail(first);
-      const factura = pickString(first, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "";
-      const vencimiento = pickString(first, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
-      const dias = getDias(first) ?? 0;
-      const saldo = getMonto(first);
-      const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
-      const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
-      const msg = renderTemplate(tpl, vars).trim();
-
-      const payload = { name, toNumber: phone, message: msg };
-      if (email) payload.email = email;
-      const tplPayload = buildTemplatePayload({ vars });
-      if (tplPayload) Object.assign(payload, tplPayload);
-      messages = [payload];
-    } else {
-      const built = buildMessages({ mode });
-      messages = built.messages;
-      missingPhone = built.missingPhone;
-    }
-
-    if (messages.length === 0) {
-      setConfigStatus(missingPhone ? `Sin teléfonos para enviar (${missingPhone} sin teléfono).` : "No hay contactos para enviar.");
-      return { ok: true, sent: 0, failed: 0 };
-    }
-
-    setConfigStatus(`Enviando WhatsApp (${messages.length}${missingPhone ? ` • ${missingPhone} sin teléfono` : ""})…`);
-    setConfigDebug("—");
-
-    const resp = await fetch("/.netlify/functions/leadconnector", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        action: "sendWhatsApp",
-        token: lcToken,
-        locationId: lcLocationId,
-        fromNumber: lcFromNumber,
-        versionMsg: "2021-04-15",
-        messages,
-        max: maxLocal,
-      }),
-    });
-
-    const text = await resp.text();
-    let json = null;
     try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
+      if (!isWhatsAppConfigured()) {
+        setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
+        return { ok: false, error: "no_config" };
+      }
 
-    if (!resp.ok) {
-      setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
-      setConfigDebug(text || `HTTP ${resp.status}`);
-      return { ok: false, error: text || `HTTP ${resp.status}` };
-    }
+      const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
 
-    const sent = Number(json?.sent ?? 0);
-    const failed = Number(json?.failed ?? 0);
-    const trunc = Boolean(json?.truncated);
-    const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
-    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}${contactId ? ` • contactId ${contactId}` : ""}`);
-    setConfigDebug(json || text);
-    return { ok: failed === 0, sent, failed };
+      if (lcUseTemplate && !templateIsEnabled()) {
+        setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
+        return { ok: false, error: "no_template" };
+      }
+
+      if (!String(lcFromNumber || "").trim()) {
+        setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
+        return { ok: false, error: "no_from" };
+      }
+
+      let messages = [];
+      let missingPhone = 0;
+      if (test) {
+        const first = currentItems[0];
+        if (!first) {
+          setConfigStatus("No hay datos cargados para probar.");
+          return { ok: false, error: "no_data" };
+        }
+        const phone = getPhone(first);
+        if (!phone) {
+          setConfigStatus("No se encontró teléfono en el primer registro.");
+          return { ok: false, error: "no_phone" };
+        }
+        const name = pickString(first, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
+        const email = getEmail(first);
+        const factura = pickString(first, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "";
+        const vencimiento = pickString(first, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
+        const dias = getDias(first) ?? 0;
+        const saldo = getMonto(first);
+        const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
+        const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
+        const msg = renderTemplate(tpl, vars).trim();
+
+        const payload = { name, toNumber: phone, message: msg };
+        if (email) payload.email = email;
+        const tplPayload = buildTemplatePayload({ vars });
+        if (tplPayload) Object.assign(payload, tplPayload);
+        messages = [payload];
+      } else {
+        const built = buildMessages({ mode });
+        messages = built.messages;
+        missingPhone = built.missingPhone;
+      }
+
+      if (messages.length === 0) {
+        setConfigStatus(missingPhone ? `Sin teléfonos para enviar (${missingPhone} sin teléfono).` : "No hay contactos para enviar.");
+        return { ok: true, sent: 0, failed: 0 };
+      }
+
+      setConfigStatus(`Enviando WhatsApp (${messages.length}${missingPhone ? ` • ${missingPhone} sin teléfono` : ""})…`);
+      setConfigDebug("—");
+
+      const resp = await fetch("/.netlify/functions/leadconnector", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          action: "sendWhatsApp",
+          token: lcToken,
+          locationId: lcLocationId,
+          fromNumber: lcFromNumber,
+          versionMsg: "2021-04-15",
+          messages,
+          max: maxLocal,
+        }),
+      });
+
+      const text = await resp.text();
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!resp.ok) {
+        setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+        setConfigDebug(text || `HTTP ${resp.status}`);
+        return { ok: false, error: text || `HTTP ${resp.status}` };
+      }
+
+      const sent = Number(json?.sent ?? 0);
+      const failed = Number(json?.failed ?? 0);
+      const trunc = Boolean(json?.truncated);
+      const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
+      setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}${contactId ? ` • contactId ${contactId}` : ""}`);
+      setConfigDebug(json || text);
+      return { ok: failed === 0, sent, failed };
+    } catch (err) {
+      setConfigStatus("Error WhatsApp: no se pudo conectar.");
+      setConfigDebug(String(err?.message || err || "Error"));
+      return { ok: false, error: String(err?.message || err || "Error") };
+    }
   };
 
   const sendTestToNumber = async () => {
-    if (!isWhatsAppConfigured()) {
-      setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
-      return;
-    }
-
-    const to = normalizePhone(configLcTestToNumberInput?.value || lcTestToNumber || "");
-    if (!to) {
-      setConfigStatus("Ingresa un número de prueba válido.");
-      return;
-    }
-
-    if (lcUseTemplate && !templateIsEnabled()) {
-      setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
-      return;
-    }
-
-    if (!String(lcFromNumber || "").trim()) {
-      setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
-      return;
-    }
-
-    setConfigStatus(`Enviando WhatsApp a ${to}…`);
-    setConfigDebug("—");
-
-    const vars = { nombre: "Prueba", factura: "", vencimiento: "", dias: "0", saldo: "" };
-    const msgPayload = { name: "Prueba", toNumber: to, message: lcTplPorVencer || "Prueba" };
-    const tplPayload = buildTemplatePayload({ vars });
-    if (tplPayload) Object.assign(msgPayload, tplPayload);
-
-    const resp = await fetch("/.netlify/functions/leadconnector", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        action: "sendWhatsApp",
-        token: lcToken,
-        locationId: lcLocationId,
-        fromNumber: lcFromNumber,
-        versionMsg: "2021-04-15",
-        messages: [msgPayload],
-        max: 1,
-      }),
-    });
-
-    const text = await resp.text();
-    let json = null;
     try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
+      if (!isWhatsAppConfigured()) {
+        setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
+        return;
+      }
 
-    if (!resp.ok) {
-      setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
-      setConfigDebug(text || `HTTP ${resp.status}`);
-      return;
-    }
+      const to = normalizePhone(configLcTestToNumberInput?.value || lcTestToNumber || "");
+      if (!to) {
+        setConfigStatus("Ingresa un número de prueba válido.");
+        return;
+      }
 
-    const sent = Number(json?.sent ?? 0);
-    const failed = Number(json?.failed ?? 0);
-    const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
-    setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${contactId ? ` • contactId ${contactId}` : ""}`);
-    setConfigDebug(json || text);
+      if (lcUseTemplate && !templateIsEnabled()) {
+        setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
+        return;
+      }
+
+      if (!String(lcFromNumber || "").trim()) {
+        setConfigStatus("Configura FromNumber (WhatsApp) para enviar.");
+        return;
+      }
+
+      setConfigStatus(`Enviando WhatsApp a ${to}…`);
+      setConfigDebug("—");
+
+      const vars = { nombre: "Prueba", factura: "", vencimiento: "", dias: "0", saldo: "" };
+      const msgPayload = { name: "Prueba", toNumber: to, message: lcTplPorVencer || "Prueba" };
+      const tplPayload = buildTemplatePayload({ vars });
+      if (tplPayload) Object.assign(msgPayload, tplPayload);
+
+      const resp = await fetch("/.netlify/functions/leadconnector", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          action: "sendWhatsApp",
+          token: lcToken,
+          locationId: lcLocationId,
+          fromNumber: lcFromNumber,
+          versionMsg: "2021-04-15",
+          messages: [msgPayload],
+          max: 1,
+        }),
+      });
+
+      const text = await resp.text();
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+
+      if (!resp.ok) {
+        setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+        setConfigDebug(text || `HTTP ${resp.status}`);
+        return;
+      }
+
+      const sent = Number(json?.sent ?? 0);
+      const failed = Number(json?.failed ?? 0);
+      const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
+      setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${contactId ? ` • contactId ${contactId}` : ""}`);
+      setConfigDebug(json || text);
+    } catch (err) {
+      setConfigStatus("Error WhatsApp: no se pudo conectar.");
+      setConfigDebug(String(err?.message || err || "Error"));
+    }
   };
 
   const render = () => {
@@ -1248,12 +1290,16 @@ const init = () => {
 
   if (testWhatsAppBtn) {
     testWhatsAppBtn.addEventListener("click", () => {
+      setConfigStatus("Enviando WhatsApp…");
+      setConfigDebug("—");
       sendToLeadConnector({ mode: "porVencer", test: true });
     });
   }
 
   if (testWhatsAppToNumberBtn) {
     testWhatsAppToNumberBtn.addEventListener("click", () => {
+      setConfigStatus("Enviando WhatsApp…");
+      setConfigDebug("—");
       sendTestToNumber();
     });
   }
