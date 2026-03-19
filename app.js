@@ -276,14 +276,14 @@ const init = () => {
   const insightMostOverdueMetaEl = document.getElementById("insightMostOverdueMeta");
 
   const chartNote = document.getElementById("chartNote");
-  const rowsEl = document.getElementById("rows");
-  const filterInput = document.getElementById("filterInput");
-  const rowsCountEl = document.getElementById("rowsCount");
-  const toggleAllBtn = document.getElementById("toggleAll");
-  const statusChips = document.getElementById("statusChips");
+  let rowsEl = document.getElementById("rows") || document.createElement("tbody");
+  let filterInput = document.getElementById("filterInput") || document.createElement("input");
+  let rowsCountEl = document.getElementById("rowsCount") || document.createElement("span");
+  let toggleAllBtn = document.getElementById("toggleAll") || document.createElement("button");
+  let statusChips = document.getElementById("statusChips") || document.createElement("div");
 
   if (!form || !identificacionInput || !fechaInput || !fetchBtn) return;
-  if (!rowsEl || !filterInput || !rowsCountEl || !toggleAllBtn) return;
+  if (!filterInput.type) filterInput.type = "search";
 
   const storedIdentificacion = window.localStorage.getItem(STORAGE_KEYS.identificacion) || "";
   const storedApiUrl = window.localStorage.getItem(STORAGE_KEYS.apiUrl) || DEFAULT_API_ENDPOINT;
@@ -425,6 +425,25 @@ const init = () => {
       configDebugEl.textContent = String(value);
     }
   };
+
+  window.addEventListener("error", (ev) => {
+    const msg = String(ev?.message || "Error");
+    setConfigStatus(`Error: ${msg}`);
+    setConfigDebug({
+      type: "error",
+      message: msg,
+      file: ev?.filename || "",
+      line: ev?.lineno || null,
+      col: ev?.colno || null,
+    });
+  });
+
+  window.addEventListener("unhandledrejection", (ev) => {
+    const reason = ev?.reason;
+    const msg = String(reason?.message || reason || "Promise rejection");
+    setConfigStatus(`Error: ${msg}`);
+    setConfigDebug({ type: "unhandledrejection", message: msg });
+  });
 
   const parseTimeMinutes = (hhmm) => {
     const raw = String(hhmm || "").trim();
