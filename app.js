@@ -631,7 +631,15 @@ const init = () => {
     if (!templateIsEnabled()) return null;
     const name = String(lcTemplateName || "").trim();
     const lang = String(lcTemplateLang || "").trim() || "es_MX";
-    const body = parseLines(lcTemplateBody).map((line) => renderTemplate(line, vars));
+    let bodyTemplateLines = parseLines(lcTemplateBody);
+    if (name === "utilidad_posventa" && bodyTemplateLines.length === 0) {
+      bodyTemplateLines = ["{nombre}", "{factura}", "{vencimiento}", "{dias}", "{saldo}"];
+    }
+    let body = bodyTemplateLines.map((line) => renderTemplate(line, vars));
+    if (name === "utilidad_posventa") {
+      body = body.slice(0, 5);
+      while (body.length < 5) body.push("");
+    }
     return {
       MessageType: 19,
       whatsapp: {
@@ -802,14 +810,17 @@ const init = () => {
       setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}${contactId ? ` • contactId ${contactId}` : ""}`);
       const firstBody = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok)?.body || "") : "";
       let conversationId = "";
+      let messageId = "";
       try {
         const parsed = firstBody ? JSON.parse(firstBody) : null;
         conversationId = parsed?.conversationId ? String(parsed.conversationId) : "";
+        messageId = parsed?.messageId ? String(parsed.messageId) : "";
       } catch {
         conversationId = "";
+        messageId = "";
       }
       if (conversationId) {
-        try {
+        const fetchConversation = async () => {
           const convResp = await fetch("/.netlify/functions/leadconnector", {
             method: "POST",
             headers: { "content-type": "application/json", accept: "application/json" },
@@ -829,9 +840,26 @@ const init = () => {
           } catch {
             convJson = null;
           }
-          setConfigDebug({ send: json || text, conversationId, conversation: convJson || convText });
+          return convJson || convText;
+        };
+
+        try {
+          const conversation = await fetchConversation();
+          setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+          const msgs = conversation?.messages?.messages;
+          const my = messageId && Array.isArray(msgs) ? msgs.find((m) => String(m?.id || "") === messageId) : null;
+          if (my && String(my?.status || "") === "pending") {
+            window.setTimeout(async () => {
+              try {
+                const refreshed = await fetchConversation();
+                setConfigDebug({ send: json || text, conversationId, messageId, conversation: refreshed });
+              } catch {
+                setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+              }
+            }, 2500);
+          }
         } catch {
-          setConfigDebug({ send: json || text, conversationId });
+          setConfigDebug({ send: json || text, conversationId, messageId });
         }
       } else {
         setConfigDebug(json || text);
@@ -921,14 +949,17 @@ const init = () => {
       setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${contactId ? ` • contactId ${contactId}` : ""}`);
       const firstBody = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok)?.body || "") : "";
       let conversationId = "";
+      let messageId = "";
       try {
         const parsed = firstBody ? JSON.parse(firstBody) : null;
         conversationId = parsed?.conversationId ? String(parsed.conversationId) : "";
+        messageId = parsed?.messageId ? String(parsed.messageId) : "";
       } catch {
         conversationId = "";
+        messageId = "";
       }
       if (conversationId) {
-        try {
+        const fetchConversation = async () => {
           const convResp = await fetch("/.netlify/functions/leadconnector", {
             method: "POST",
             headers: { "content-type": "application/json", accept: "application/json" },
@@ -948,9 +979,26 @@ const init = () => {
           } catch {
             convJson = null;
           }
-          setConfigDebug({ send: json || text, conversationId, conversation: convJson || convText });
+          return convJson || convText;
+        };
+
+        try {
+          const conversation = await fetchConversation();
+          setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+          const msgs = conversation?.messages?.messages;
+          const my = messageId && Array.isArray(msgs) ? msgs.find((m) => String(m?.id || "") === messageId) : null;
+          if (my && String(my?.status || "") === "pending") {
+            window.setTimeout(async () => {
+              try {
+                const refreshed = await fetchConversation();
+                setConfigDebug({ send: json || text, conversationId, messageId, conversation: refreshed });
+              } catch {
+                setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+              }
+            }, 2500);
+          }
         } catch {
-          setConfigDebug({ send: json || text, conversationId });
+          setConfigDebug({ send: json || text, conversationId, messageId });
         }
       } else {
         setConfigDebug(json || text);
