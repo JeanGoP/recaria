@@ -281,9 +281,13 @@ const init = () => {
   let rowsCountEl = document.getElementById("rowsCount") || document.createElement("span");
   let toggleAllBtn = document.getElementById("toggleAll") || document.createElement("button");
   let statusChips = document.getElementById("statusChips") || document.createElement("div");
+  let clientsRowsEl = document.getElementById("clientsRows") || document.createElement("tbody");
+  let clientsFilterInput = document.getElementById("clientsFilterInput") || document.createElement("input");
+  let clientsCountEl = document.getElementById("clientsCount") || document.createElement("span");
 
   if (!form || !identificacionInput || !fechaInput || !fetchBtn) return;
   if (!filterInput.type) filterInput.type = "search";
+  if (!clientsFilterInput.type) clientsFilterInput.type = "search";
 
   const storedIdentificacion = window.localStorage.getItem(STORAGE_KEYS.identificacion) || "";
   const storedApiUrl = window.localStorage.getItem(STORAGE_KEYS.apiUrl) || DEFAULT_API_ENDPOINT;
@@ -379,6 +383,9 @@ const init = () => {
       if (viewName === "cartera") {
         pageTitleEl.textContent = "Cartera";
         pageSubtitleEl.textContent = "Detalle y filtros de cartera";
+      } else if (viewName === "clientes") {
+        pageTitleEl.textContent = "Clientes";
+        pageSubtitleEl.textContent = "Listado de clientes";
       } else if (viewName === "config") {
         pageTitleEl.textContent = "Configuración";
         pageSubtitleEl.textContent = "URL y token de conexión";
@@ -390,6 +397,10 @@ const init = () => {
 
     if (viewName === "cartera") {
       window.setTimeout(() => filterInput.focus(), 0);
+    }
+
+    if (viewName === "clientes") {
+      window.setTimeout(() => clientsFilterInput.focus(), 0);
     }
 
     if (viewName === "config") {
@@ -1062,6 +1073,60 @@ const init = () => {
     toggleAllBtn.textContent = showAll ? "Ver menos" : "Ver todo";
   };
 
+  const renderClients = () => {
+    const q = String(clientsFilterInput.value || "").trim().toLowerCase();
+    const map = new Map();
+
+    for (const it of currentItems) {
+      const cliente = pickString(it, ["cliente", "Cliente", "CLIENTE", "nombre", "Nombre"]) || "—";
+      const iden = pickString(it, ["iden", "Identificacion", "identificacion"]) || "";
+      const celular = getPhone(it) || "";
+      const key = String(iden || celular || cliente || "").trim();
+      if (!key) continue;
+
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, { cliente, iden, celular });
+        continue;
+      }
+
+      map.set(key, {
+        cliente: prev.cliente && prev.cliente !== "—" ? prev.cliente : cliente,
+        iden: prev.iden || iden,
+        celular: prev.celular || celular,
+      });
+    }
+
+    let clients = Array.from(map.values());
+    clients.sort((a, b) => String(a.cliente || "").localeCompare(String(b.cliente || ""), "es", { sensitivity: "base" }));
+
+    if (q) {
+      clients = clients.filter((c) => {
+        const hay = `${c.cliente || ""} ${c.iden || ""} ${c.celular || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    clientsRowsEl.innerHTML = "";
+    if (clients.length === 0) {
+      clientsRowsEl.innerHTML = '<tr><td>—</td><td class="mono">—</td><td class="mono">—</td></tr>';
+      if (clientsCountEl) clientsCountEl.textContent = "0";
+      return;
+    }
+
+    for (const c of clients) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(c.cliente || "—")}</td>
+        <td class="mono">${escapeHtml(c.iden || "—")}</td>
+        <td class="mono">${escapeHtml(c.celular || "—")}</td>
+      `;
+      clientsRowsEl.appendChild(tr);
+    }
+
+    if (clientsCountEl) clientsCountEl.textContent = String(clients.length);
+  };
+
   const computeAndRenderKpis = () => {
     const total = currentItems.reduce((acc, it) => acc + getMonto(it), 0);
     if (totalCarteraEl) totalCarteraEl.textContent = formatCOP(total);
@@ -1284,6 +1349,7 @@ const init = () => {
       computeAndRenderKpis();
       computeAndRenderInsights();
       render();
+      renderClients();
       if (statusChips) {
         for (const btn of Array.from(statusChips.querySelectorAll("[data-status]"))) {
           btn.classList.toggle("btn--ghost-active", btn.getAttribute("data-status") === "all");
@@ -1490,6 +1556,10 @@ const init = () => {
     render();
   });
 
+  clientsFilterInput.addEventListener("input", () => {
+    renderClients();
+  });
+
   toggleAllBtn.addEventListener("click", () => {
     showAll = !showAll;
     render();
@@ -1542,6 +1612,7 @@ const init = () => {
   computeAndRenderKpis();
   computeAndRenderInsights();
   render();
+  renderClients();
   const initialView = window.location.hash.replace("#", "").trim();
   if (!initialView && !isConfigured()) {
     window.location.hash = "config";

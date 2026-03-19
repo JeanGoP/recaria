@@ -63,7 +63,7 @@
             </span>
             Facturas
           </a>
-          <a class="nav__item" href="#">
+          <a class="nav__item" id="nav-clientes" href="#clientes" data-view="clientes">
             <span class="nav__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="M16.5 21.5H7.5A3 3 0 0 1 4.5 18.5V5.5A3 3 0 0 1 7.5 2.5h9A3 3 0 0 1 19.5 5.5v13a3 3 0 0 1-3 3Z" stroke="currentColor" stroke-width="1.7" />
@@ -342,6 +342,50 @@
                 <div class="panel__footer">
                   <div class="muted">Mostrando <span id="rowsCount">3</span> registros</div>
                   <button class="btn btn--secondary" id="toggleAll" type="button">Ver todo</button>
+                </div>
+              </section>
+            </section>
+          </section>
+
+          <section class="view view--hidden" id="view-clientes" data-view="clientes">
+            <section class="grid grid--single" aria-label="Clientes">
+              <section class="panel">
+                <div class="panel__head">
+                  <div class="panel__title">Clientes</div>
+                  <div class="panel__actions">
+                    <div class="search">
+                      <span class="search__icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none">
+                          <path d="M10.5 18.5a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" stroke="currentColor" stroke-width="1.7" />
+                          <path d="M17 17l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <input class="search__input" id="clientsFilterInput" type="search" placeholder="Buscar por cliente, identificación o celular..." />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="tableWrap">
+                  <table class="table">
+                    <thead>
+                      <tr>
+                        <th>Cliente</th>
+                        <th class="mono">Identificación</th>
+                        <th class="mono">Celular</th>
+                      </tr>
+                    </thead>
+                    <tbody id="clientsRows">
+                      <tr>
+                        <td>—</td>
+                        <td class="mono">—</td>
+                        <td class="mono">—</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="panel__footer">
+                  <div class="muted">Mostrando <span id="clientsCount">0</span> clientes</div>
                 </div>
               </section>
             </section>
