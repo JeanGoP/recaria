@@ -728,9 +728,10 @@ const init = () => {
           setConfigStatus("No hay datos cargados para probar.");
           return { ok: false, error: "no_data" };
         }
-        const phone = getPhone(first);
+        const preferredTo = normalizePhone(configLcTestToNumberInput?.value || lcTestToNumber || "");
+        const phone = preferredTo || getPhone(first);
         if (!phone) {
-          setConfigStatus("No se encontró teléfono en el primer registro.");
+          setConfigStatus("Configura Número de prueba o asegura teléfono en el primer registro.");
           return { ok: false, error: "no_phone" };
         }
         const name = pickString(first, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
