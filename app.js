@@ -487,6 +487,13 @@ const init = () => {
     if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
     if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es_MX";
     if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
+
+    if (lcUseTemplate && !String(lcTemplateName || "").trim()) {
+      lcTemplateName = "utilidad_posventa";
+      if (configLcTemplateNameInput && !String(configLcTemplateNameInput.value || "").trim()) {
+        configLcTemplateNameInput.value = lcTemplateName;
+      }
+    }
   };
 
   const refreshScheduleUi = () => {
@@ -688,6 +695,7 @@ const init = () => {
 
   const sendToLeadConnector = async ({ mode, test }) => {
     try {
+      syncLcFromInputs();
       if (window.location?.protocol === "file:") {
         setConfigStatus("WhatsApp no funciona en modo archivo. Abre la app con un servidor (Netlify).");
         setConfigDebug("Estás abriendo index.html como archivo (file://). Las Functions no existen en ese modo.");
@@ -703,6 +711,7 @@ const init = () => {
 
       if (lcUseTemplate && !templateIsEnabled()) {
         setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
+        setConfigDebug({ error: "no_template", lcUseTemplate, lcTemplateName, lcTemplateLang });
         return { ok: false, error: "no_template" };
       }
 
@@ -801,6 +810,7 @@ const init = () => {
 
   const sendTestToNumber = async () => {
     try {
+      syncLcFromInputs();
       if (window.location?.protocol === "file:") {
         setConfigStatus("WhatsApp no funciona en modo archivo. Abre la app con un servidor (Netlify).");
         setConfigDebug("Estás abriendo index.html como archivo (file://). Las Functions no existen en ese modo.");
@@ -820,6 +830,7 @@ const init = () => {
 
       if (lcUseTemplate && !templateIsEnabled()) {
         setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
+        setConfigDebug({ error: "no_template", lcUseTemplate, lcTemplateName, lcTemplateLang });
         return;
       }
 
