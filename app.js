@@ -800,7 +800,42 @@ const init = () => {
       const trunc = Boolean(json?.truncated);
       const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
       setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${trunc ? " • truncado" : ""}${contactId ? ` • contactId ${contactId}` : ""}`);
-      setConfigDebug(json || text);
+      const firstBody = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok)?.body || "") : "";
+      let conversationId = "";
+      try {
+        const parsed = firstBody ? JSON.parse(firstBody) : null;
+        conversationId = parsed?.conversationId ? String(parsed.conversationId) : "";
+      } catch {
+        conversationId = "";
+      }
+      if (conversationId) {
+        try {
+          const convResp = await fetch("/.netlify/functions/leadconnector", {
+            method: "POST",
+            headers: { "content-type": "application/json", accept: "application/json" },
+            body: JSON.stringify({
+              action: "getConversationMessages",
+              token: lcToken,
+              locationId: lcLocationId,
+              versionMsg: "2021-04-15",
+              conversationId,
+              limit: 20,
+            }),
+          });
+          const convText = await convResp.text();
+          let convJson = null;
+          try {
+            convJson = convText ? JSON.parse(convText) : null;
+          } catch {
+            convJson = null;
+          }
+          setConfigDebug({ send: json || text, conversationId, conversation: convJson || convText });
+        } catch {
+          setConfigDebug({ send: json || text, conversationId });
+        }
+      } else {
+        setConfigDebug(json || text);
+      }
       return { ok: failed === 0, sent, failed };
     } catch (err) {
       setConfigStatus("Error WhatsApp: no se pudo conectar.");
@@ -884,7 +919,42 @@ const init = () => {
       const failed = Number(json?.failed ?? 0);
       const contactId = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok && r.contactId)?.contactId || "") : "";
       setConfigStatus(`WhatsApp: ${sent} ok • ${failed} error${contactId ? ` • contactId ${contactId}` : ""}`);
-      setConfigDebug(json || text);
+      const firstBody = Array.isArray(json?.results) ? String(json.results.find((r) => r && r.ok)?.body || "") : "";
+      let conversationId = "";
+      try {
+        const parsed = firstBody ? JSON.parse(firstBody) : null;
+        conversationId = parsed?.conversationId ? String(parsed.conversationId) : "";
+      } catch {
+        conversationId = "";
+      }
+      if (conversationId) {
+        try {
+          const convResp = await fetch("/.netlify/functions/leadconnector", {
+            method: "POST",
+            headers: { "content-type": "application/json", accept: "application/json" },
+            body: JSON.stringify({
+              action: "getConversationMessages",
+              token: lcToken,
+              locationId: lcLocationId,
+              versionMsg: "2021-04-15",
+              conversationId,
+              limit: 20,
+            }),
+          });
+          const convText = await convResp.text();
+          let convJson = null;
+          try {
+            convJson = convText ? JSON.parse(convText) : null;
+          } catch {
+            convJson = null;
+          }
+          setConfigDebug({ send: json || text, conversationId, conversation: convJson || convText });
+        } catch {
+          setConfigDebug({ send: json || text, conversationId });
+        }
+      } else {
+        setConfigDebug(json || text);
+      }
     } catch (err) {
       setConfigStatus("Error WhatsApp: no se pudo conectar.");
       setConfigDebug(String(err?.message || err || "Error"));

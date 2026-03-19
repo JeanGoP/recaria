@@ -67,6 +67,25 @@ export async function handler(event) {
     return { ok: resp.ok, status: resp.status, text, json };
   };
 
+  const getJson = async ({ url, version }) => {
+    const resp = await fetch(url, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        Version: version,
+        Authorization: token,
+      },
+    });
+    const text = await resp.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { ok: resp.ok, status: resp.status, text, json };
+  };
+
   if (action === "upsertContacts") {
     const version = String(body.version || "2021-07-28").trim() || "2021-07-28";
     const contacts = Array.isArray(body.contacts) ? body.contacts : [];
@@ -224,6 +243,24 @@ export async function handler(event) {
       headers,
       body: JSON.stringify({ ok: failed === 0, sent, failed, results, truncated: messages.length > slice.length }),
     };
+  }
+
+  if (action === "getConversationMessages") {
+    const versionMsg = String(body.versionMsg || "2021-04-15").trim() || "2021-04-15";
+    const conversationId = String(body.conversationId || "").trim();
+    const msgLimit = Math.max(1, Math.min(100, Number.isFinite(Number(body.limit)) ? Math.trunc(Number(body.limit)) : 20));
+
+    if (!conversationId) {
+      return { statusCode: 400, headers, body: JSON.stringify({ Error: true, Mensaje: "conversationId es obligatorio." }) };
+    }
+
+    const url = `https://services.leadconnectorhq.com/conversations/${encodeURIComponent(conversationId)}/messages?limit=${msgLimit}`;
+    try {
+      const r = await getJson({ url, version: versionMsg });
+      return { statusCode: r.ok ? 200 : r.status || 500, headers, body: r.text || JSON.stringify(r.json || {}) };
+    } catch (err) {
+      return { statusCode: 500, headers, body: JSON.stringify({ Error: true, Mensaje: String(err?.message || err || "Error") }) };
+    }
   }
 
   return { statusCode: 400, headers, body: JSON.stringify({ Error: true, Mensaje: "action inválida." }) };
