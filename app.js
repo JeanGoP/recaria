@@ -1029,7 +1029,7 @@ const init = () => {
 
     if (visible.length === 0) {
       rowsEl.innerHTML =
-        '<tr><td class="mono">—</td><td>—</td><td>—</td><td class="t-right mono">—</td><td class="t-right">$0</td><td class="t-center"><span class="status status--slate">Sin datos</span></td></tr>';
+        '<tr><td class="mono">—</td><td>—</td><td class="mono">—</td><td>—</td><td class="t-right mono">—</td><td class="t-right">$0</td><td class="t-center"><span class="status status--slate">Sin datos</span></td></tr>';
       rowsCountEl.textContent = "0";
       setHidden(toggleAllBtn, true);
       return;
@@ -1038,6 +1038,7 @@ const init = () => {
     for (const it of visible) {
       const factura = pickString(it, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "—";
       const cliente = pickString(it, ["cliente", "Cliente", "CLIENTE"]) || "—";
+      const celular = getPhone(it) || "—";
       const vencimiento = pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "—";
       const dias = getDias(it);
       const monto = getMonto(it);
@@ -1047,6 +1048,7 @@ const init = () => {
       tr.innerHTML = `
         <td class="mono">${escapeHtml(factura)}</td>
         <td>${escapeHtml(cliente)}</td>
+        <td class="mono">${escapeHtml(celular)}</td>
         <td>${escapeHtml(vencimiento)}</td>
         <td class="t-right mono">${dias === null ? "—" : escapeHtml(String(dias))}</td>
         <td class="t-right">${escapeHtml(formatCOP(monto))}</td>
