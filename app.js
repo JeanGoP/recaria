@@ -283,7 +283,11 @@ const init = () => {
   let statusChips = document.getElementById("statusChips") || document.createElement("div");
   let clientsRowsEl = document.getElementById("clientsRows") || document.createElement("tbody");
   let clientsFilterInput = document.getElementById("clientsFilterInput") || document.createElement("input");
-  let clientsCountEl = document.getElementById("clientsCount") || document.createElement("span");
+  let clientsRangeEl = document.getElementById("clientsRange") || document.createElement("span");
+  let clientsTotalEl = document.getElementById("clientsTotal") || document.createElement("span");
+  let clientsPageEl = document.getElementById("clientsPage") || document.createElement("span");
+  let clientsPrevBtn = document.getElementById("clientsPrev") || document.createElement("button");
+  let clientsNextBtn = document.getElementById("clientsNext") || document.createElement("button");
 
   if (!form || !identificacionInput || !fechaInput || !fetchBtn) return;
   if (!filterInput.type) filterInput.type = "search";
@@ -327,6 +331,9 @@ const init = () => {
   let selectedRange = 30;
   const pageSize = 12;
   let inFlight = null;
+
+  const clientsPageSize = 50;
+  let clientsPage = 1;
 
   let configApiUrl = storedApiUrl;
   let configToken = storedToken;
@@ -1107,14 +1114,27 @@ const init = () => {
       });
     }
 
+    const total = clients.length;
+    const pages = Math.max(1, Math.ceil(total / clientsPageSize));
+    clientsPage = Math.max(1, Math.min(pages, Number.isFinite(Number(clientsPage)) ? Math.trunc(Number(clientsPage)) : 1));
+
+    const startIdx = total === 0 ? 0 : (clientsPage - 1) * clientsPageSize;
+    const endIdx = total === 0 ? 0 : Math.min(startIdx + clientsPageSize, total);
+    const pageItems = total === 0 ? [] : clients.slice(startIdx, endIdx);
+
+    if (clientsTotalEl) clientsTotalEl.textContent = String(total);
+    if (clientsRangeEl) clientsRangeEl.textContent = total === 0 ? "0" : `${startIdx + 1}-${endIdx}`;
+    if (clientsPageEl) clientsPageEl.textContent = `${clientsPage}/${pages}`;
+    if (clientsPrevBtn) clientsPrevBtn.disabled = clientsPage <= 1;
+    if (clientsNextBtn) clientsNextBtn.disabled = clientsPage >= pages;
+
     clientsRowsEl.innerHTML = "";
-    if (clients.length === 0) {
+    if (pageItems.length === 0) {
       clientsRowsEl.innerHTML = '<tr><td>—</td><td class="mono">—</td><td class="mono">—</td></tr>';
-      if (clientsCountEl) clientsCountEl.textContent = "0";
       return;
     }
 
-    for (const c of clients) {
+    for (const c of pageItems) {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${escapeHtml(c.cliente || "—")}</td>
@@ -1123,8 +1143,6 @@ const init = () => {
       `;
       clientsRowsEl.appendChild(tr);
     }
-
-    if (clientsCountEl) clientsCountEl.textContent = String(clients.length);
   };
 
   const computeAndRenderKpis = () => {
@@ -1343,6 +1361,7 @@ const init = () => {
 
       const result = Array.isArray(data?.Resultado) ? data.Resultado : [];
       currentItems = result;
+      clientsPage = 1;
       showAll = false;
       statusFilter = "all";
       setText("lastSync", formatLastSync(new Date()));
@@ -1557,6 +1576,7 @@ const init = () => {
   });
 
   clientsFilterInput.addEventListener("input", () => {
+    clientsPage = 1;
     renderClients();
   });
 
