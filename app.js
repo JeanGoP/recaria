@@ -497,11 +497,10 @@ const init = () => {
     }
 
     if (runNowBtn) runNowBtn.disabled = !isConfigured();
-    const waOk = isWhatsAppConfigured();
-    if (testWhatsAppBtn) testWhatsAppBtn.disabled = !waOk;
-    if (testWhatsAppToNumberBtn) testWhatsAppToNumberBtn.disabled = !waOk;
-    if (sendRemindersBtn) sendRemindersBtn.disabled = !waOk;
-    if (sendCollectionsBtn) sendCollectionsBtn.disabled = !waOk;
+    if (testWhatsAppBtn) testWhatsAppBtn.disabled = false;
+    if (testWhatsAppToNumberBtn) testWhatsAppToNumberBtn.disabled = false;
+    if (sendRemindersBtn) sendRemindersBtn.disabled = false;
+    if (sendCollectionsBtn) sendCollectionsBtn.disabled = false;
   };
 
   const refreshConfigUi = () => {
@@ -670,6 +669,12 @@ const init = () => {
 
   const sendToLeadConnector = async ({ mode, test }) => {
     try {
+      if (window.location?.protocol === "file:") {
+        setConfigStatus("WhatsApp no funciona en modo archivo. Abre la app con un servidor (Netlify).");
+        setConfigDebug("Estás abriendo index.html como archivo (file://). Las Functions no existen en ese modo.");
+        return { ok: false, error: "file_mode" };
+      }
+
       if (!isWhatsAppConfigured()) {
         setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
         return { ok: false, error: "no_config" };
@@ -752,7 +757,11 @@ const init = () => {
       }
 
       if (!resp.ok) {
-        setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+        if (resp.status === 404) {
+          setConfigStatus("Error WhatsApp: no se encontró el servicio (leadconnector).");
+        } else {
+          setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+        }
         setConfigDebug(text || `HTTP ${resp.status}`);
         return { ok: false, error: text || `HTTP ${resp.status}` };
       }
@@ -773,6 +782,12 @@ const init = () => {
 
   const sendTestToNumber = async () => {
     try {
+      if (window.location?.protocol === "file:") {
+        setConfigStatus("WhatsApp no funciona en modo archivo. Abre la app con un servidor (Netlify).");
+        setConfigDebug("Estás abriendo index.html como archivo (file://). Las Functions no existen en ese modo.");
+        return;
+      }
+
       if (!isWhatsAppConfigured()) {
         setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
         return;
@@ -825,7 +840,11 @@ const init = () => {
       }
 
       if (!resp.ok) {
-        setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+        if (resp.status === 404) {
+          setConfigStatus("Error WhatsApp: no se encontró el servicio (leadconnector).");
+        } else {
+          setConfigStatus(`Error WhatsApp: HTTP ${resp.status}`);
+        }
         setConfigDebug(text || `HTTP ${resp.status}`);
         return;
       }
