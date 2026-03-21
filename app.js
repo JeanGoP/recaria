@@ -1310,6 +1310,16 @@ const init = () => {
     inFlight = new AbortController();
 
     setLoading(true);
+    currentItems = [];
+    clientsPage = 1;
+    showAll = false;
+    statusFilter = "all";
+    try {
+      computeAndRenderKpis();
+      computeAndRenderInsights();
+      render();
+      renderClients();
+    } catch {}
     try {
       const endpoint = useProxy
         ? "/.netlify/functions/sync"
