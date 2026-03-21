@@ -49,19 +49,28 @@ const getTokenDbPool = async () => {
   return tokenDbPoolPromise;
 };
 
-const looksLikeToken = (raw) => {
-  const s = String(raw || "").trim();
-  if (!s) return false;
-  if (/^bearer\s+\S+/i.test(s)) return true;
-  if (s.length >= 30) return true;
-  const jwtish = /^[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_+=/]+$/.test(s);
-  return jwtish;
+const stripOuterQuotes = (s) => {
+  const v = String(s || "").trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) return v.slice(1, -1).trim();
+  return v;
 };
 
+const jwtLike = (raw) => {
+  const s = stripOuterQuotes(raw);
+  if (!s) return false;
+  const tokenOnly = s.replace(/^bearer\s+/i, "").trim();
+  const dotCount = (tokenOnly.match(/\./g) || []).length;
+  if (dotCount !== 2) return false;
+  return /^[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_+=/]+$/.test(tokenOnly);
+};
+
+const looksLikeToken = (raw) => jwtLike(raw);
+
 const normalizeBearer = (raw) => {
-  const s = String(raw || "").trim();
+  const s = stripOuterQuotes(String(raw || "").trim());
   if (!s) return "";
-  return /^bearer\s+/i.test(s) ? s : `Bearer ${s}`;
+  const tokenOnly = stripOuterQuotes(s.replace(/^bearer\s+/i, "").trim());
+  return `Bearer ${tokenOnly}`;
 };
 
 const computeExpiresAtMs = (fetchedAtMs) => {
@@ -78,7 +87,7 @@ const fetchTokenFromDbWithRetry = async ({ maxAttempts }) => {
       console.log(JSON.stringify({ scope: "wa_token", step: "fetch_start", attempt }));
       const pool = await getTokenDbPool();
       const res = await pool.request().query("select top 1 access_token from Empresas");
-      const token = String(res?.recordset?.[0]?.access_token || "").trim();
+      const token = stripOuterQuotes(String(res?.recordset?.[0]?.access_token || "").trim());
       const elapsedMs = Date.now() - startedAt;
 
       if (!token) {
@@ -86,7 +95,11 @@ const fetchTokenFromDbWithRetry = async ({ maxAttempts }) => {
         throw new Error("Token no disponible (access_token vacío).");
       }
       if (!looksLikeToken(token)) {
-        console.log(JSON.stringify({ scope: "wa_token", step: "fetch_invalid_format", attempt, elapsedMs, length: token.length }));
+        const tokenOnly = token.replace(/^bearer\s+/i, "").trim();
+        const dotCount = (tokenOnly.match(/\./g) || []).length;
+        console.log(
+          JSON.stringify({ scope: "wa_token", step: "fetch_invalid_format", attempt, elapsedMs, length: token.length, dotCount })
+        );
         throw new Error("Token con formato inválido.");
       }
 
