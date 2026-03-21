@@ -771,7 +771,7 @@ const init = () => {
         const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
         const msg = renderTemplate(tpl, vars).trim();
 
-        const payload = { name, toNumber: phone, message: msg };
+        const payload = { name, toNumber: preferredTo, message: msg };
         if (email) payload.email = email;
         const tplPayload = buildTemplatePayload({ vars });
         if (tplPayload) Object.assign(payload, tplPayload);
