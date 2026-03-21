@@ -362,7 +362,7 @@ const init = () => {
   };
 
   const isWhatsAppConfigured = () => {
-    return String(lcToken || "").trim().length > 0 && String(lcLocationId || "").trim().length > 0;
+    return String(lcLocationId || "").trim().length > 0;
   };
 
   const setLoading = (loading) => {
@@ -729,7 +729,7 @@ const init = () => {
       }
 
       if (!isWhatsAppConfigured()) {
-        setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
+        setConfigStatus("Configura LocationId para enviar.");
         return { ok: false, error: "no_config" };
       }
 
@@ -900,7 +900,7 @@ const init = () => {
       }
 
       if (!isWhatsAppConfigured()) {
-        setConfigStatus("Configura Token WhatsApp y LocationId para enviar.");
+        setConfigStatus("Configura LocationId para enviar.");
         return;
       }
 
@@ -1579,6 +1579,20 @@ const init = () => {
     clientsPage = 1;
     renderClients();
   });
+
+  if (clientsPrevBtn) {
+    clientsPrevBtn.addEventListener("click", () => {
+      clientsPage = Math.max(1, clientsPage - 1);
+      renderClients();
+    });
+  }
+
+  if (clientsNextBtn) {
+    clientsNextBtn.addEventListener("click", () => {
+      clientsPage += 1;
+      renderClients();
+    });
+  }
 
   toggleAllBtn.addEventListener("click", () => {
     showAll = !showAll;

@@ -1,3 +1,142 @@
+import sql from "mssql";
+
+let tokenDbPoolPromise = null;
+let cachedLcToken = {
+  value: "",
+  fetchedAtMs: 0,
+  expiresAtMs: 0,
+};
+
+const getEnv = (name) => {
+  const v = process.env[name];
+  return v === undefined ? "" : String(v);
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const getTokenDbConfig = () => {
+  const encryptRaw = getEnv("WA_TOKEN_SQL_SERVER_ENCRYPT").trim().toLowerCase();
+  const trustRaw = getEnv("WA_TOKEN_SQL_SERVER_TRUST_CERT").trim().toLowerCase();
+  return {
+    server: getEnv("WA_TOKEN_SQL_SERVER_HOST").trim(),
+    user: getEnv("WA_TOKEN_SQL_SERVER_USER").trim(),
+    password: getEnv("WA_TOKEN_SQL_SERVER_PASSWORD"),
+    database: getEnv("WA_TOKEN_SQL_SERVER_DB").trim(),
+    port: Number.parseInt(getEnv("WA_TOKEN_SQL_SERVER_PORT") || "1433", 10),
+    options: {
+      encrypt: encryptRaw ? encryptRaw !== "false" : true,
+      trustServerCertificate: trustRaw ? trustRaw === "true" : false,
+    },
+    pool: {
+      max: 2,
+      min: 0,
+      idleTimeoutMillis: 30_000,
+    },
+  };
+};
+
+const getTokenDbPool = async () => {
+  if (!tokenDbPoolPromise) {
+    const cfg = getTokenDbConfig();
+    if (!cfg.server || !cfg.user || !cfg.password || !cfg.database) {
+      throw new Error("Faltan variables de entorno WA_TOKEN_SQL_SERVER_* para leer el token WhatsApp.");
+    }
+    tokenDbPoolPromise = new sql.ConnectionPool(cfg).connect().catch((err) => {
+      tokenDbPoolPromise = null;
+      throw err;
+    });
+  }
+  return tokenDbPoolPromise;
+};
+
+const looksLikeToken = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return false;
+  if (/^bearer\s+\S+/i.test(s)) return true;
+  if (s.length >= 30) return true;
+  const jwtish = /^[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_+=/]+$/.test(s);
+  return jwtish;
+};
+
+const normalizeBearer = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  return /^bearer\s+/i.test(s) ? s : `Bearer ${s}`;
+};
+
+const computeExpiresAtMs = (fetchedAtMs) => {
+  const d = new Date(fetchedAtMs);
+  const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0).getTime();
+  const atMost24h = fetchedAtMs + 24 * 60 * 60 * 1000;
+  return Math.min(atMost24h, nextMidnight + 10 * 60 * 1000);
+};
+
+const fetchTokenFromDbWithRetry = async ({ maxAttempts }) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+    try {
+      console.log(JSON.stringify({ scope: "wa_token", step: "fetch_start", attempt }));
+      const pool = await getTokenDbPool();
+      const res = await pool.request().query("select top 1 access_token from Empresas");
+      const token = String(res?.recordset?.[0]?.access_token || "").trim();
+      const elapsedMs = Date.now() - startedAt;
+
+      if (!token) {
+        console.log(JSON.stringify({ scope: "wa_token", step: "fetch_empty", attempt, elapsedMs }));
+        throw new Error("Token no disponible (access_token vacío).");
+      }
+      if (!looksLikeToken(token)) {
+        console.log(JSON.stringify({ scope: "wa_token", step: "fetch_invalid_format", attempt, elapsedMs, length: token.length }));
+        throw new Error("Token con formato inválido.");
+      }
+
+      console.log(JSON.stringify({ scope: "wa_token", step: "fetch_ok", attempt, elapsedMs, length: token.length }));
+      return token;
+    } catch (err) {
+      const elapsedMs = Date.now() - startedAt;
+      console.log(
+        JSON.stringify({
+          scope: "wa_token",
+          step: "fetch_error",
+          attempt,
+          elapsedMs,
+          name: err?.name || null,
+          code: err?.code || null,
+          message: String(err?.message || err || "Error"),
+        })
+      );
+      if (attempt >= maxAttempts) throw err;
+      await sleep(250 * attempt);
+    }
+  }
+  throw new Error("No se pudo obtener el token.");
+};
+
+const getCachedOrFetchLcToken = async ({ force }) => {
+  const now = Date.now();
+  if (!force && cachedLcToken.value && cachedLcToken.expiresAtMs > now) {
+    console.log(JSON.stringify({ scope: "wa_token", step: "cache_hit", expiresInSec: Math.round((cachedLcToken.expiresAtMs - now) / 1000) }));
+    return cachedLcToken.value;
+  }
+
+  console.log(JSON.stringify({ scope: "wa_token", step: force ? "cache_refresh" : "cache_miss" }));
+  const token = await fetchTokenFromDbWithRetry({ maxAttempts: 3 });
+  const fetchedAtMs = Date.now();
+  cachedLcToken = {
+    value: token,
+    fetchedAtMs,
+    expiresAtMs: computeExpiresAtMs(fetchedAtMs),
+  };
+  console.log(
+    JSON.stringify({
+      scope: "wa_token",
+      step: "cache_set",
+      expiresInSec: Math.round((cachedLcToken.expiresAtMs - fetchedAtMs) / 1000),
+    })
+  );
+  return token;
+};
+
 export async function handler(event) {
   const headers = {
     "content-type": "application/json; charset=utf-8",
@@ -23,15 +162,20 @@ export async function handler(event) {
   const action = String(body.action || "upsertContacts").trim() || "upsertContacts";
   const max = Number.isFinite(Number(body.max)) ? Math.trunc(Number(body.max)) : 50;
 
-  if (!tokenRaw) {
-    return {
-      statusCode: 400,
-      headers,
-      body: JSON.stringify({ Error: true, Mensaje: "token es obligatorio." }),
-    };
+  let token = "";
+  try {
+    if (tokenRaw) {
+      if (!looksLikeToken(tokenRaw)) {
+        return { statusCode: 400, headers, body: JSON.stringify({ Error: true, Mensaje: "token con formato inválido." }) };
+      }
+      token = normalizeBearer(tokenRaw);
+    } else {
+      const dbToken = await getCachedOrFetchLcToken({ force: false });
+      token = normalizeBearer(dbToken);
+    }
+  } catch (err) {
+    return { statusCode: 500, headers, body: JSON.stringify({ Error: true, Mensaje: String(err?.message || err || "Error leyendo token WhatsApp") }) };
   }
-
-  const token = /^bearer\s+/i.test(tokenRaw) ? tokenRaw : `Bearer ${tokenRaw}`;
 
   const limit = Math.max(1, Math.min(200, max));
 
@@ -85,6 +229,19 @@ export async function handler(event) {
     }
     return { ok: resp.ok, status: resp.status, text, json };
   };
+
+  if (action === "refreshToken") {
+    try {
+      await getCachedOrFetchLcToken({ force: true });
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
+    } catch (err) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ Error: true, Mensaje: String(err?.message || err || "Error refrescando token") }),
+      };
+    }
+  }
 
   if (action === "upsertContacts") {
     const version = String(body.version || "2021-07-28").trim() || "2021-07-28";

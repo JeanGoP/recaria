@@ -2,11 +2,19 @@ import crypto from "crypto";
 import sql from "mssql";
 
 let poolPromise = null;
+let waTokenPoolPromise = null;
+let cachedWaToken = {
+  value: "",
+  fetchedAtMs: 0,
+  expiresAtMs: 0,
+};
 
 const getEnv = (name) => {
   const v = process.env[name];
   return v === undefined ? "" : String(v);
 };
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const getSqlConfig = () => {
   const encryptRaw = getEnv("SQL_SERVER_ENCRYPT").trim().toLowerCase();
@@ -41,6 +49,117 @@ const getPool = async () => {
     });
   }
   return poolPromise;
+};
+
+const looksLikeToken = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return false;
+  if (/^bearer\s+\S+/i.test(s)) return true;
+  if (s.length >= 30) return true;
+  const jwtish = /^[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_]+=*\.[A-Za-z0-9\-_+=/]+$/.test(s);
+  return jwtish;
+};
+
+const computeExpiresAtMs = (fetchedAtMs) => {
+  const d = new Date(fetchedAtMs);
+  const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0).getTime();
+  const atMost24h = fetchedAtMs + 24 * 60 * 60 * 1000;
+  return Math.min(atMost24h, nextMidnight + 10 * 60 * 1000);
+};
+
+const getWaTokenSqlConfig = () => {
+  const encryptRaw = getEnv("WA_TOKEN_SQL_SERVER_ENCRYPT").trim().toLowerCase();
+  const trustRaw = getEnv("WA_TOKEN_SQL_SERVER_TRUST_CERT").trim().toLowerCase();
+  return {
+    server: getEnv("WA_TOKEN_SQL_SERVER_HOST").trim(),
+    user: getEnv("WA_TOKEN_SQL_SERVER_USER").trim(),
+    password: getEnv("WA_TOKEN_SQL_SERVER_PASSWORD"),
+    database: getEnv("WA_TOKEN_SQL_SERVER_DB").trim(),
+    port: Number.parseInt(getEnv("WA_TOKEN_SQL_SERVER_PORT") || "1433", 10),
+    options: {
+      encrypt: encryptRaw ? encryptRaw !== "false" : true,
+      trustServerCertificate: trustRaw ? trustRaw === "true" : false,
+    },
+    pool: {
+      max: 2,
+      min: 0,
+      idleTimeoutMillis: 30_000,
+    },
+  };
+};
+
+const getWaTokenPool = async () => {
+  if (!waTokenPoolPromise) {
+    const cfg = getWaTokenSqlConfig();
+    if (!cfg.server || !cfg.user || !cfg.password || !cfg.database) {
+      throw new Error("Faltan variables de entorno WA_TOKEN_SQL_SERVER_* para leer el token WhatsApp.");
+    }
+    waTokenPoolPromise = new sql.ConnectionPool(cfg).connect().catch((err) => {
+      waTokenPoolPromise = null;
+      throw err;
+    });
+  }
+  return waTokenPoolPromise;
+};
+
+const fetchWhatsAppTokenWithRetry = async ({ maxAttempts }) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const startedAt = Date.now();
+    try {
+      console.log(JSON.stringify({ scope: "sync", step: "wa_token_fetch_start", attempt }));
+      const pool = await getWaTokenPool();
+      const res = await pool.request().query("select top 1 access_token from Empresas");
+      const token = String(res?.recordset?.[0]?.access_token || "").trim();
+      const elapsedMs = Date.now() - startedAt;
+
+      if (!token) {
+        console.log(JSON.stringify({ scope: "sync", step: "wa_token_fetch_empty", attempt, elapsedMs }));
+        throw new Error("Token no disponible (access_token vacío).");
+      }
+      if (!looksLikeToken(token)) {
+        console.log(JSON.stringify({ scope: "sync", step: "wa_token_fetch_invalid_format", attempt, elapsedMs, length: token.length }));
+        throw new Error("Token con formato inválido.");
+      }
+
+      console.log(JSON.stringify({ scope: "sync", step: "wa_token_fetch_ok", attempt, elapsedMs, length: token.length }));
+      return token;
+    } catch (err) {
+      const elapsedMs = Date.now() - startedAt;
+      console.log(
+        JSON.stringify({
+          scope: "sync",
+          step: "wa_token_fetch_error",
+          attempt,
+          elapsedMs,
+          name: err?.name || null,
+          code: err?.code || null,
+          message: String(err?.message || err || "Error"),
+        })
+      );
+      if (attempt >= maxAttempts) throw err;
+      await sleep(250 * attempt);
+    }
+  }
+  throw new Error("No se pudo obtener el token.");
+};
+
+const ensureWhatsAppTokenFresh = async ({ force }) => {
+  const now = Date.now();
+  if (!force && cachedWaToken.value && cachedWaToken.expiresAtMs > now) {
+    console.log(JSON.stringify({ scope: "sync", step: "wa_token_cache_hit", expiresInSec: Math.round((cachedWaToken.expiresAtMs - now) / 1000) }));
+    return cachedWaToken.value;
+  }
+
+  console.log(JSON.stringify({ scope: "sync", step: force ? "wa_token_cache_refresh" : "wa_token_cache_miss" }));
+  const token = await fetchWhatsAppTokenWithRetry({ maxAttempts: 3 });
+  const fetchedAtMs = Date.now();
+  cachedWaToken = {
+    value: token,
+    fetchedAtMs,
+    expiresAtMs: computeExpiresAtMs(fetchedAtMs),
+  };
+  console.log(JSON.stringify({ scope: "sync", step: "wa_token_cache_set", expiresInSec: Math.round((cachedWaToken.expiresAtMs - fetchedAtMs) / 1000) }));
+  return token;
 };
 
 const pickString = (obj, keys) => {
@@ -161,6 +280,21 @@ export async function handler(event) {
   url.searchParams.set("token", token);
 
   const tokenHash = crypto.createHash("sha256").update(token, "utf8").digest("hex");
+  const syncId = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  console.log(JSON.stringify({ scope: "sync", step: "start", syncId, fecha: Fecha, hasIdentificacion: Boolean(String(Identificacion || "").trim()) }));
+
+  try {
+    await ensureWhatsAppTokenFresh({ force: false });
+  } catch (err) {
+    console.log(
+      JSON.stringify({
+        scope: "sync",
+        step: "wa_token_refresh_failed",
+        syncId,
+        message: String(err?.message || err || "Error"),
+      })
+    );
+  }
 
   let apiText = "";
   let apiJson = null;
@@ -178,6 +312,7 @@ export async function handler(event) {
 
     apiJson = apiText ? JSON.parse(apiText) : {};
   } catch (err) {
+    console.log(JSON.stringify({ scope: "sync", step: "api_error", syncId, message: String(err?.message || err || "Error") }));
     return {
       statusCode: 502,
       headers,
@@ -186,6 +321,7 @@ export async function handler(event) {
   }
 
   const itemsRaw = Array.isArray(apiJson?.Resultado) ? apiJson.Resultado : [];
+  console.log(JSON.stringify({ scope: "sync", step: "api_ok", syncId, itemsRaw: itemsRaw.length }));
   const uniq = new Map();
   for (const it of itemsRaw) {
     const numFactura = pickString(it, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "—";
@@ -308,6 +444,7 @@ export async function handler(event) {
     );
 
     await tx.commit();
+    console.log(JSON.stringify({ scope: "sync", step: "sql_ok", syncId, empresaId, count: items.length }));
   } catch (err) {
     const msg = String(err?.message || err || "Error SQL");
     const detalle = {
@@ -315,6 +452,7 @@ export async function handler(event) {
       code: err?.code || null,
       number: err?.number || null,
     };
+    console.log(JSON.stringify({ scope: "sync", step: "sql_error", syncId, message: msg, detalle }));
     try {
       const pool = await getPool();
       const req = pool.request();
