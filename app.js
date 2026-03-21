@@ -754,12 +754,13 @@ const init = () => {
           setConfigStatus("No hay datos cargados para probar.");
           return { ok: false, error: "no_data" };
         }
+
         const preferredTo = normalizePhone(configLcTestToNumberInput?.value || lcTestToNumber || "");
-        const phone = preferredTo || getPhone(first);
-        if (!phone) {
-          setConfigStatus("Configura Número de prueba o asegura teléfono en el primer registro.");
-          return { ok: false, error: "no_phone" };
+        if (!preferredTo) {
+          setConfigStatus("Ingresa un número de prueba válido.");
+          return { ok: false, error: "no_test_number" };
         }
+
         const name = pickString(first, ["cliente", "Cliente", "CLIENTE"]) || "Cliente";
         const email = getEmail(first);
         const factura = pickString(first, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "";
