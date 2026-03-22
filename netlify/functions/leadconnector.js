@@ -171,7 +171,7 @@ export async function handler(event) {
   }
 
   const tokenRaw = String(body.token || "").trim();
-  const locationId = String(body.locationId || "").trim();
+  const locationId = String(body.locationId || "").trim() || getEnv("LC_LOCATION_ID").trim();
   const action = String(body.action || "upsertContacts").trim() || "upsertContacts";
   const max = Number.isFinite(Number(body.max)) ? Math.trunc(Number(body.max)) : 50;
 

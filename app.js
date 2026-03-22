@@ -766,11 +766,6 @@ const init = () => {
         return { ok: false, error: "file_mode" };
       }
 
-      if (!isWhatsAppConfigured()) {
-        setConfigStatus("Configura LocationId para enviar.");
-        return { ok: false, error: "no_config" };
-      }
-
       const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
 
       if (lcUseTemplate && !templateIsEnabled()) {
@@ -1003,11 +998,6 @@ const init = () => {
       if (window.location?.protocol === "file:") {
         setConfigStatus("WhatsApp no funciona en modo archivo. Abre la app con un servidor (Netlify).");
         setConfigDebug("Estás abriendo index.html como archivo (file://). Las Functions no existen en ese modo.");
-        return;
-      }
-
-      if (!isWhatsAppConfigured()) {
-        setConfigStatus("Configura LocationId para enviar.");
         return;
       }
 
@@ -1530,7 +1520,7 @@ const init = () => {
     if (res?.ok) {
       window.localStorage.setItem(STORAGE_KEYS.scheduleLastRunError, "");
       window.localStorage.setItem(STORAGE_KEYS.scheduleLastRunCount, String(res.count ?? 0));
-      if (lcAuto && isWhatsAppConfigured()) {
+      if (lcAuto) {
         await sendToLeadConnector({ mode: "porVencer", test: false });
         await sendToLeadConnector({ mode: "cobro", test: false });
       }
