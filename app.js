@@ -806,7 +806,7 @@ const init = () => {
           fromNumber: lcFromNumber,
           versionMsg: "2021-04-15",
           messages,
-          max: maxLocal,
+          max: test ? 1 : maxLocal,
         }),
       });
 
@@ -874,6 +874,7 @@ const init = () => {
           const my = messageId && Array.isArray(msgs) ? msgs.find((m) => String(m?.id || "") === messageId) : null;
           const myStatus = String(my?.status || "");
           const myError = String(my?.error || "");
+          const debugBase = { send: json || text, conversationId, messageId, message: my || null };
 
           const canRetryLang =
             messages.length === 1 &&
@@ -911,31 +912,39 @@ const init = () => {
                   retryJson = null;
                 }
                 const refreshed = await fetchConversation();
-                setConfigDebug({
-                  send: json || text,
-                  conversationId,
-                  messageId,
-                  conversation,
-                  retry: retryJson || retryText,
-                  retryLang: shortLang,
-                  conversationAfterRetry: refreshed,
-                });
+                let retryMessageId = "";
+                try {
+                  const rb = Array.isArray(retryJson?.results) ? String(retryJson.results[0]?.body || "") : "";
+                  const rp = rb ? JSON.parse(rb) : null;
+                  retryMessageId = rp?.messageId ? String(rp.messageId) : "";
+                } catch {
+                  retryMessageId = "";
+                }
+                const refreshedMsgs = refreshed?.messages?.messages;
+                const retryMessage =
+                  retryMessageId && Array.isArray(refreshedMsgs)
+                    ? refreshedMsgs.find((m) => String(m?.id || "") === retryMessageId) || null
+                    : null;
+                setConfigDebug({ ...debugBase, retry: retryJson || retryText, retryLang: shortLang, retryMessageId, retryMessage });
                 return { ok: false, sent, failed };
               } catch (e) {
-                setConfigDebug({ send: json || text, conversationId, messageId, conversation, retryLang: shortLang, retryError: String(e?.message || e || "Error") });
+                setConfigDebug({ ...debugBase, retryLang: shortLang, retryError: String(e?.message || e || "Error") });
                 return { ok: false, sent, failed };
               }
             }
           }
 
-          setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+          setConfigDebug(debugBase);
           if (my && String(my?.status || "") === "pending") {
             window.setTimeout(async () => {
               try {
                 const refreshed = await fetchConversation();
-                setConfigDebug({ send: json || text, conversationId, messageId, conversation: refreshed });
+                const refreshedMsgs = refreshed?.messages?.messages;
+                const refreshedMy =
+                  messageId && Array.isArray(refreshedMsgs) ? refreshedMsgs.find((m) => String(m?.id || "") === messageId) || null : null;
+                setConfigDebug({ send: json || text, conversationId, messageId, message: refreshedMy });
               } catch {
-                setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+                setConfigDebug(debugBase);
               }
             }, 2500);
           }
@@ -1068,16 +1077,20 @@ const init = () => {
 
         try {
           const conversation = await fetchConversation();
-          setConfigDebug({ send: json || text, conversationId, messageId, conversation });
           const msgs = conversation?.messages?.messages;
-          const my = messageId && Array.isArray(msgs) ? msgs.find((m) => String(m?.id || "") === messageId) : null;
+          const my = messageId && Array.isArray(msgs) ? msgs.find((m) => String(m?.id || "") === messageId) || null : null;
+          const debugBase = { send: json || text, conversationId, messageId, message: my };
+          setConfigDebug(debugBase);
           if (my && String(my?.status || "") === "pending") {
             window.setTimeout(async () => {
               try {
                 const refreshed = await fetchConversation();
-                setConfigDebug({ send: json || text, conversationId, messageId, conversation: refreshed });
+                const refreshedMsgs = refreshed?.messages?.messages;
+                const refreshedMy =
+                  messageId && Array.isArray(refreshedMsgs) ? refreshedMsgs.find((m) => String(m?.id || "") === messageId) || null : null;
+                setConfigDebug({ send: json || text, conversationId, messageId, message: refreshedMy });
               } catch {
-                setConfigDebug({ send: json || text, conversationId, messageId, conversation });
+                setConfigDebug(debugBase);
               }
             }, 2500);
           }
