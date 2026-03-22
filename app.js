@@ -511,7 +511,7 @@ const init = () => {
     if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
     if (configLcUseTemplateInput) lcUseTemplate = Boolean(configLcUseTemplateInput.checked);
     if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
-    if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es_MX";
+    if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es";
     if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
 
     if (lcUseTemplate && !String(lcTemplateName || "").trim()) {
@@ -661,7 +661,7 @@ const init = () => {
 
     const defaultName = pickedMode === "cobro" ? "cobro" : "por_vencer";
     const configuredName = String(lcTemplateName || "").trim();
-    const name = configuredName || defaultName;
+    const name = configuredName === "por_vencer" || configuredName === "cobro" ? configuredName : defaultName;
 
     const montoPlain = formatCOPPlain(toNumber(vars?.saldoNumero) ?? toNumber(vars?.saldo) ?? toNumber(String(vars?.saldo || "").replace(/[^\d.,-]/g, "")) ?? 0);
     const bodyByMode =
@@ -1630,7 +1630,7 @@ const init = () => {
       if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
       if (configLcUseTemplateInput) lcUseTemplate = Boolean(configLcUseTemplateInput.checked);
       if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
-      if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es_MX";
+      if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es";
       if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
       if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
       if (configLcAutoInput) lcAuto = Boolean(configLcAutoInput.checked);
