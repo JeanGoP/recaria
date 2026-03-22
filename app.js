@@ -1441,27 +1441,6 @@ const init = () => {
       window.clearInterval(scheduleIntervalId);
       scheduleIntervalId = null;
     }
-
-    if (!scheduleEnabled) return;
-    scheduleIntervalId = window.setInterval(() => {
-      if (!scheduleEnabled) return;
-      if (!isConfigured()) return;
-
-      const scheduleMinutes = parseTimeMinutes(scheduleTime);
-      if (scheduleMinutes === null) return;
-
-      const now = new Date();
-      const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      target.setTime(target.getTime() + scheduleMinutes * 60_000);
-      if (now.getTime() < target.getTime()) return;
-
-      const lastAtRaw = window.localStorage.getItem(STORAGE_KEYS.scheduleLastRunAt) || "";
-      const lastAt = lastAtRaw ? new Date(lastAtRaw) : null;
-      const lastAtMs = lastAt && Number.isFinite(lastAt.getTime()) ? lastAt.getTime() : -Infinity;
-      if (lastAtMs >= target.getTime()) return;
-
-      runScheduled();
-    }, 30_000);
   };
 
   form.addEventListener("submit", (e) => {
@@ -1473,7 +1452,7 @@ const init = () => {
   });
 
   if (configForm && configApiUrlInput && configTokenInput) {
-    configForm.addEventListener("submit", (e) => {
+    configForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       hideError();
 
@@ -1530,6 +1509,32 @@ const init = () => {
       window.localStorage.setItem(STORAGE_KEYS.lcUseTemplate, lcUseTemplate ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.lcAuto, lcAuto ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.lcMax, String(lcMax));
+
+      try {
+        const resp = await fetch("/.netlify/functions/sync", {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({
+            action: "saveSchedulerConfig",
+            apiUrl: configApiUrl,
+            token: configToken,
+            scheduleEnabled,
+            scheduleTime,
+            lcFromNumber,
+            lcUseTemplate,
+            lcAuto,
+            lcMax,
+          }),
+        });
+        if (!resp.ok) {
+          const t = await resp.text().catch(() => "");
+          setConfigDebug(t || `Error servidor (${resp.status})`);
+        } else {
+          setConfigDebug("Servidor: OK");
+        }
+      } catch (err) {
+        setConfigDebug(String(err?.message || err || "Error guardando en servidor"));
+      }
 
       setConfigStatus("Guardado");
       refreshConfigUi();

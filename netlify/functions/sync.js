@@ -247,6 +247,67 @@ const parseDateTime2 = (value) => {
   )}:${pad(d.getSeconds())}`;
 };
 
+const ensureSchedulerConfigTable = async () => {
+  const pool = await getPool();
+  await pool
+    .request()
+    .query(`IF OBJECT_ID('dbo.CarteraSchedulerConfig','U') IS NULL
+BEGIN
+  CREATE TABLE dbo.CarteraSchedulerConfig(
+    EmpresaId INT NOT NULL PRIMARY KEY,
+    ApiUrl NVARCHAR(2048) NOT NULL,
+    ApiToken NVARCHAR(512) NOT NULL,
+    ScheduleEnabled BIT NOT NULL,
+    ScheduleTime CHAR(5) NOT NULL,
+    LcFromNumber NVARCHAR(32) NULL,
+    LcUseTemplate BIT NOT NULL,
+    LcAuto BIT NOT NULL,
+    LcMax INT NOT NULL,
+    LastRunDay CHAR(10) NULL,
+    LastRunAt DATETIME2(0) NULL,
+    UpdatedAt DATETIME2(0) NOT NULL
+  );
+END`);
+};
+
+const parseTimeMinutes = (time) => {
+  const s = String(time || "").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number.parseInt(m[1], 10);
+  const mm = Number.parseInt(m[2], 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  if (hh < 0 || hh > 23) return null;
+  if (mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+};
+
+const getOrCreateEmpresaId = async ({ tokenHash }) => {
+  const pool = await getPool();
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    const reqEmpresa = new sql.Request(tx);
+    reqEmpresa.input("TokenHash", sql.Char(64), tokenHash);
+    const empresaRes = await reqEmpresa.query(
+      "SELECT EmpresaId FROM dbo.Empresa WITH (UPDLOCK, HOLDLOCK) WHERE TokenHash = @TokenHash"
+    );
+    if (empresaRes.recordset.length) {
+      await tx.commit();
+      return Number.parseInt(empresaRes.recordset[0].EmpresaId, 10);
+    }
+    const ins = await reqEmpresa.query("INSERT INTO dbo.Empresa(TokenHash) VALUES (@TokenHash); SELECT SCOPE_IDENTITY() AS EmpresaId;");
+    const empresaId = Number.parseInt(ins.recordset?.[0]?.EmpresaId, 10);
+    await tx.commit();
+    return empresaId;
+  } catch (err) {
+    try {
+      await tx.rollback();
+    } catch {}
+    throw err;
+  }
+};
+
 export async function handler(event) {
   const headers = {
     "content-type": "application/json; charset=utf-8",
@@ -271,6 +332,63 @@ export async function handler(event) {
   const token = String(body.token || "").trim();
   const Identificacion = String(body.Identificacion || "");
   const Fecha = String(body.Fecha || "").trim();
+  const action = String(body.action || "").trim();
+
+  if (action === "saveSchedulerConfig") {
+    if (!apiUrl || !token) {
+      return { statusCode: 400, headers, body: JSON.stringify({ Error: true, Mensaje: "apiUrl y token son obligatorios." }) };
+    }
+
+    let url;
+    try {
+      url = new URL(apiUrl);
+    } catch {
+      return { statusCode: 400, headers, body: JSON.stringify({ Error: true, Mensaje: "apiUrl inválida." }) };
+    }
+
+    const scheduleEnabled = Boolean(body.scheduleEnabled);
+    const scheduleTime = String(body.scheduleTime || "").trim() || "02:00";
+    if (scheduleEnabled && parseTimeMinutes(scheduleTime) === null) {
+      return { statusCode: 400, headers, body: JSON.stringify({ Error: true, Mensaje: "Hora inválida." }) };
+    }
+
+    const lcFromNumber = String(body.lcFromNumber || "").trim();
+    const lcUseTemplate = Boolean(body.lcUseTemplate);
+    const lcAuto = Boolean(body.lcAuto);
+    const rawMax = Number(body.lcMax);
+    const lcMax = Number.isFinite(rawMax) ? Math.max(1, Math.min(200, Math.trunc(rawMax))) : 50;
+
+    const tokenHash = crypto.createHash("sha256").update(token, "utf8").digest("hex");
+    try {
+      await ensureSchedulerConfigTable();
+      const empresaId = await getOrCreateEmpresaId({ tokenHash });
+      const pool = await getPool();
+      const req = pool.request();
+      req.input("EmpresaId", sql.Int, empresaId);
+      req.input("ApiUrl", sql.NVarChar(2048), url.toString());
+      req.input("ApiToken", sql.NVarChar(512), token);
+      req.input("ScheduleEnabled", sql.Bit, scheduleEnabled ? 1 : 0);
+      req.input("ScheduleTime", sql.Char(5), scheduleTime);
+      req.input("LcFromNumber", sql.NVarChar(32), lcFromNumber || null);
+      req.input("LcUseTemplate", sql.Bit, lcUseTemplate ? 1 : 0);
+      req.input("LcAuto", sql.Bit, lcAuto ? 1 : 0);
+      req.input("LcMax", sql.Int, lcMax);
+      req.input("UpdatedAt", sql.DateTime2(0), new Date().toISOString().slice(0, 19).replace("T", " "));
+      await req.query(`MERGE dbo.CarteraSchedulerConfig AS t
+USING (SELECT @EmpresaId AS EmpresaId) AS s
+ON (t.EmpresaId = s.EmpresaId)
+WHEN MATCHED THEN
+  UPDATE SET ApiUrl=@ApiUrl, ApiToken=@ApiToken, ScheduleEnabled=@ScheduleEnabled, ScheduleTime=@ScheduleTime,
+    LcFromNumber=@LcFromNumber, LcUseTemplate=@LcUseTemplate, LcAuto=@LcAuto, LcMax=@LcMax, UpdatedAt=@UpdatedAt
+WHEN NOT MATCHED THEN
+  INSERT (EmpresaId, ApiUrl, ApiToken, ScheduleEnabled, ScheduleTime, LcFromNumber, LcUseTemplate, LcAuto, LcMax, UpdatedAt)
+  VALUES (@EmpresaId, @ApiUrl, @ApiToken, @ScheduleEnabled, @ScheduleTime, @LcFromNumber, @LcUseTemplate, @LcAuto, @LcMax, @UpdatedAt);`);
+
+      return { statusCode: 200, headers, body: JSON.stringify({ Ok: true }) };
+    } catch (err) {
+      return { statusCode: 500, headers, body: JSON.stringify({ Error: true, Mensaje: String(err?.message || err || "Error guardando configuración") }) };
+    }
+  }
 
   if (!apiUrl || !token || !Fecha) {
     return {
