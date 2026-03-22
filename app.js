@@ -1671,7 +1671,7 @@ const init = () => {
     testWhatsAppBtn.addEventListener("click", () => {
       setConfigStatus("Enviando WhatsApp…");
       setConfigDebug("—");
-      sendToLeadConnector({ mode: "porVencer", test: true });
+      sendToLeadConnector({ mode: "cobro", test: true });
     });
   }
 
