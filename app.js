@@ -46,6 +46,13 @@ const formatCOP = (value) => {
   }).format(value);
 };
 
+const formatCOPPlain = (value) => {
+  return new Intl.NumberFormat("es-CO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
 const setText = (id, value) => {
   const el = document.getElementById(id);
   if (!el) return;
@@ -316,7 +323,8 @@ const init = () => {
   const storedLcTestToNumber = window.localStorage.getItem(STORAGE_KEYS.lcTestToNumber) || "";
   const storedLcUseTemplate = window.localStorage.getItem(STORAGE_KEYS.lcUseTemplate) === "1";
   const storedLcTemplateName = window.localStorage.getItem(STORAGE_KEYS.lcTemplateName) || "";
-  const storedLcTemplateLang = window.localStorage.getItem(STORAGE_KEYS.lcTemplateLang) || "es_MX";
+  const storedLcTemplateLangRaw = window.localStorage.getItem(STORAGE_KEYS.lcTemplateLang) || "";
+  const storedLcTemplateLang = storedLcTemplateLangRaw === "es_MX" ? "es" : storedLcTemplateLangRaw || "es";
   const storedLcTemplateBody = window.localStorage.getItem(STORAGE_KEYS.lcTemplateBody) || "";
   const storedLcAuto = window.localStorage.getItem(STORAGE_KEYS.lcAuto) === "1";
   const storedLcMaxRaw = window.localStorage.getItem(STORAGE_KEYS.lcMax) || "50";
@@ -635,7 +643,7 @@ const init = () => {
   };
 
   const templateIsEnabled = () => {
-    return Boolean(lcUseTemplate && String(lcTemplateName || "").trim());
+    return Boolean(lcUseTemplate);
   };
 
   const parseLines = (raw) => {
@@ -645,19 +653,40 @@ const init = () => {
       .filter(Boolean);
   };
 
-  const buildTemplatePayload = ({ vars }) => {
+  const buildTemplatePayload = ({ vars, mode }) => {
     if (!templateIsEnabled()) return null;
-    const name = String(lcTemplateName || "").trim();
-    const lang = String(lcTemplateLang || "").trim() || "es_MX";
-    let bodyTemplateLines = parseLines(lcTemplateBody);
-    if (name === "utilidad_posventa" && bodyTemplateLines.length === 0) {
-      bodyTemplateLines = ["{nombre}", "{factura}", "{vencimiento}", "{dias}", "{saldo}"];
+
+    const pickedMode = mode === "cobro" ? "cobro" : "porVencer";
+    const lang = String(lcTemplateLang || "").trim() || "es";
+
+    const defaultName = pickedMode === "cobro" ? "cobro" : "por_vencer";
+    const configuredName = String(lcTemplateName || "").trim();
+    const name = configuredName || defaultName;
+
+    const montoPlain = formatCOPPlain(toNumber(vars?.saldo) ?? toNumber(String(vars?.saldo || "").replace(/[^\d.,-]/g, "")) ?? 0);
+    const bodyByMode =
+      name === "por_vencer"
+        ? [String(vars?.nombre || ""), String(vars?.vencimiento || ""), `${montoPlain} COP`, String(vars?.factura || "")]
+        : name === "cobro"
+          ? [String(vars?.nombre || ""), String(vars?.factura || ""), String(vars?.vencimiento || ""), String(vars?.dias || ""), montoPlain]
+          : null;
+
+    let body = [];
+    if (bodyByMode) {
+      body = bodyByMode;
+    } else {
+      const bodyTemplateLines = parseLines(lcTemplateBody);
+      body = bodyTemplateLines.map((line) => renderTemplate(line, vars));
     }
-    let body = bodyTemplateLines.map((line) => renderTemplate(line, vars));
-    if (name === "utilidad_posventa") {
+
+    if (name === "por_vencer") {
+      body = body.slice(0, 4);
+      while (body.length < 4) body.push("");
+    } else if (name === "cobro") {
       body = body.slice(0, 5);
       while (body.length < 5) body.push("");
     }
+
     return {
       MessageType: 19,
       whatsapp: {
@@ -710,7 +739,7 @@ const init = () => {
       };
       if (email) payload.email = email;
       if (tag) payload.tags = [tag];
-      const tplPayload = buildTemplatePayload({ vars });
+      const tplPayload = buildTemplatePayload({ vars, mode });
       if (tplPayload) {
         payload.message = "Mensaje";
         Object.assign(payload, tplPayload);
@@ -776,7 +805,7 @@ const init = () => {
 
         const payload = { name, toNumber: preferredTo, message: msg };
         if (email) payload.email = email;
-        const tplPayload = buildTemplatePayload({ vars });
+        const tplPayload = buildTemplatePayload({ vars, mode });
         if (tplPayload) {
           payload.message = "Mensaje";
           Object.assign(payload, tplPayload);
@@ -998,7 +1027,7 @@ const init = () => {
 
       const vars = { nombre: "Prueba", factura: "", vencimiento: "", dias: "0", saldo: "" };
       const msgPayload = { name: "Prueba", toNumber: to, message: lcTplPorVencer || "Prueba" };
-      const tplPayload = buildTemplatePayload({ vars });
+      const tplPayload = buildTemplatePayload({ vars, mode: "porVencer" });
       if (tplPayload) {
         msgPayload.message = "Mensaje";
         Object.assign(msgPayload, tplPayload);
