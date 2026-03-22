@@ -47,7 +47,7 @@ const formatCOP = (value) => {
 };
 
 const formatCOPPlain = (value) => {
-  return new Intl.NumberFormat("es-CO", {
+  return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
@@ -693,6 +693,12 @@ const init = () => {
         type: "template",
         template: { name, lang },
         placeholders: { header: [], body, buttons: [] },
+        components: [
+          {
+            type: "body",
+            parameters: body.map((text) => ({ type: "text", text: String(text ?? "") })),
+          },
+        ],
       },
     };
   };
