@@ -711,7 +711,10 @@ const init = () => {
       if (email) payload.email = email;
       if (tag) payload.tags = [tag];
       const tplPayload = buildTemplatePayload({ vars });
-      if (tplPayload) Object.assign(payload, tplPayload);
+      if (tplPayload) {
+        payload.message = "Mensaje";
+        Object.assign(payload, tplPayload);
+      }
       wanted.push(payload);
       if (wanted.length >= maxLocal) break;
     }
@@ -774,7 +777,10 @@ const init = () => {
         const payload = { name, toNumber: preferredTo, message: msg };
         if (email) payload.email = email;
         const tplPayload = buildTemplatePayload({ vars });
-        if (tplPayload) Object.assign(payload, tplPayload);
+        if (tplPayload) {
+          payload.message = "Mensaje";
+          Object.assign(payload, tplPayload);
+        }
         messages = [payload];
       } else {
         const built = buildMessages({ mode });
@@ -864,9 +870,65 @@ const init = () => {
 
         try {
           const conversation = await fetchConversation();
-          setConfigDebug({ send: json || text, conversationId, messageId, conversation });
           const msgs = conversation?.messages?.messages;
           const my = messageId && Array.isArray(msgs) ? msgs.find((m) => String(m?.id || "") === messageId) : null;
+          const myStatus = String(my?.status || "");
+          const myError = String(my?.error || "");
+
+          const canRetryLang =
+            messages.length === 1 &&
+            Boolean(messages[0]?.whatsapp?.template?.lang) &&
+            /does not exist in the translation/i.test(myError) &&
+            /template name/i.test(myError) &&
+            myStatus === "failed";
+
+          if (canRetryLang) {
+            const lang = String(messages[0]?.whatsapp?.template?.lang || "").trim();
+            const shortLang = lang.includes("_") ? lang.split("_")[0] : "";
+            if (shortLang && shortLang !== lang) {
+              const retried = JSON.parse(JSON.stringify(messages[0]));
+              retried.whatsapp.template.lang = shortLang;
+              setConfigStatus(`WhatsApp: reintentando plantilla con lang ${shortLang}…`);
+              try {
+                const retryResp = await fetch("/.netlify/functions/leadconnector", {
+                  method: "POST",
+                  headers: { "content-type": "application/json", accept: "application/json" },
+                  body: JSON.stringify({
+                    action: "sendWhatsApp",
+                    token: lcToken,
+                    locationId: lcLocationId,
+                    fromNumber: lcFromNumber,
+                    versionMsg: "2021-04-15",
+                    messages: [retried],
+                    max: 1,
+                  }),
+                });
+                const retryText = await retryResp.text();
+                let retryJson = null;
+                try {
+                  retryJson = retryText ? JSON.parse(retryText) : null;
+                } catch {
+                  retryJson = null;
+                }
+                const refreshed = await fetchConversation();
+                setConfigDebug({
+                  send: json || text,
+                  conversationId,
+                  messageId,
+                  conversation,
+                  retry: retryJson || retryText,
+                  retryLang: shortLang,
+                  conversationAfterRetry: refreshed,
+                });
+                return { ok: false, sent, failed };
+              } catch (e) {
+                setConfigDebug({ send: json || text, conversationId, messageId, conversation, retryLang: shortLang, retryError: String(e?.message || e || "Error") });
+                return { ok: false, sent, failed };
+              }
+            }
+          }
+
+          setConfigDebug({ send: json || text, conversationId, messageId, conversation });
           if (my && String(my?.status || "") === "pending") {
             window.setTimeout(async () => {
               try {
@@ -928,7 +990,10 @@ const init = () => {
       const vars = { nombre: "Prueba", factura: "", vencimiento: "", dias: "0", saldo: "" };
       const msgPayload = { name: "Prueba", toNumber: to, message: lcTplPorVencer || "Prueba" };
       const tplPayload = buildTemplatePayload({ vars });
-      if (tplPayload) Object.assign(msgPayload, tplPayload);
+      if (tplPayload) {
+        msgPayload.message = "Mensaje";
+        Object.assign(msgPayload, tplPayload);
+      }
 
       const resp = await fetch("/.netlify/functions/leadconnector", {
         method: "POST",
