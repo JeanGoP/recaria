@@ -10,19 +10,9 @@ const STORAGE_KEYS = {
   scheduleLastRunAt: "collectai.schedule.lastRunAt",
   scheduleLastRunCount: "collectai.schedule.lastRunCount",
   scheduleLastRunError: "collectai.schedule.lastRunError",
-  lcToken: "collectai.lc.token",
-  lcLocationId: "collectai.lc.locationId",
-  lcPhoneField: "collectai.lc.phoneField",
-  lcTagPorVencer: "collectai.lc.tagPorVencer",
-  lcTagCobro: "collectai.lc.tagCobro",
   lcFromNumber: "collectai.lc.fromNumber",
-  lcTplPorVencer: "collectai.lc.tplPorVencer",
-  lcTplCobro: "collectai.lc.tplCobro",
   lcTestToNumber: "collectai.lc.testToNumber",
   lcUseTemplate: "collectai.lc.useTemplate",
-  lcTemplateName: "collectai.lc.template.name",
-  lcTemplateLang: "collectai.lc.template.lang",
-  lcTemplateBody: "collectai.lc.template.body",
   lcAuto: "collectai.lc.auto",
   lcMax: "collectai.lc.max",
 };
@@ -244,18 +234,8 @@ const init = () => {
   const configUseProxyInput = document.getElementById("configUseProxy");
   const configScheduleEnabledInput = document.getElementById("configScheduleEnabled");
   const configScheduleTimeInput = document.getElementById("configScheduleTime");
-  const configLcTokenInput = document.getElementById("configLcToken");
-  const configLcLocationIdInput = document.getElementById("configLcLocationId");
-  const configLcPhoneFieldInput = document.getElementById("configLcPhoneField");
   const configLcFromNumberInput = document.getElementById("configLcFromNumber");
-  const configLcTagPorVencerInput = document.getElementById("configLcTagPorVencer");
-  const configLcTagCobroInput = document.getElementById("configLcTagCobro");
-  const configLcTplPorVencerInput = document.getElementById("configLcTplPorVencer");
-  const configLcTplCobroInput = document.getElementById("configLcTplCobro");
   const configLcUseTemplateInput = document.getElementById("configLcUseTemplate");
-  const configLcTemplateNameInput = document.getElementById("configLcTemplateName");
-  const configLcTemplateLangInput = document.getElementById("configLcTemplateLang");
-  const configLcTemplateBodyInput = document.getElementById("configLcTemplateBody");
   const configLcTestToNumberInput = document.getElementById("configLcTestToNumber");
   const configLcAutoInput = document.getElementById("configLcAuto");
   const configLcMaxInput = document.getElementById("configLcMax");
@@ -308,24 +288,9 @@ const init = () => {
   const storedUseProxy = storedUseProxyRaw === null ? inferredProxy : storedUseProxyRaw === "1";
   const storedScheduleEnabled = window.localStorage.getItem(STORAGE_KEYS.scheduleEnabled) === "1";
   const storedScheduleTime = window.localStorage.getItem(STORAGE_KEYS.scheduleTime) || "02:00";
-  const storedLcToken = window.localStorage.getItem(STORAGE_KEYS.lcToken) || "";
-  const storedLcLocationId = window.localStorage.getItem(STORAGE_KEYS.lcLocationId) || "";
-  const storedLcPhoneField = window.localStorage.getItem(STORAGE_KEYS.lcPhoneField) || "telefono";
-  const storedLcTagPorVencer = window.localStorage.getItem(STORAGE_KEYS.lcTagPorVencer) || "recarIA_por_vencer";
-  const storedLcTagCobro = window.localStorage.getItem(STORAGE_KEYS.lcTagCobro) || "recarIA_cobro";
   const storedLcFromNumber = window.localStorage.getItem(STORAGE_KEYS.lcFromNumber) || "";
-  const storedLcTplPorVencer =
-    window.localStorage.getItem(STORAGE_KEYS.lcTplPorVencer) ||
-    "Hola {nombre}, te recordamos que tienes un vencimiento el {vencimiento} por {saldo} (Factura {factura}).";
-  const storedLcTplCobro =
-    window.localStorage.getItem(STORAGE_KEYS.lcTplCobro) ||
-    "Hola {nombre}, tu factura {factura} venció el {vencimiento} hace {dias} días. Saldo pendiente: {saldo}.";
   const storedLcTestToNumber = window.localStorage.getItem(STORAGE_KEYS.lcTestToNumber) || "";
   const storedLcUseTemplate = window.localStorage.getItem(STORAGE_KEYS.lcUseTemplate) === "1";
-  const storedLcTemplateName = window.localStorage.getItem(STORAGE_KEYS.lcTemplateName) || "";
-  const storedLcTemplateLangRaw = window.localStorage.getItem(STORAGE_KEYS.lcTemplateLang) || "";
-  const storedLcTemplateLang = storedLcTemplateLangRaw === "es_MX" ? "es" : storedLcTemplateLangRaw || "es";
-  const storedLcTemplateBody = window.localStorage.getItem(STORAGE_KEYS.lcTemplateBody) || "";
   const storedLcAuto = window.localStorage.getItem(STORAGE_KEYS.lcAuto) === "1";
   const storedLcMaxRaw = window.localStorage.getItem(STORAGE_KEYS.lcMax) || "50";
   const storedLcMax = Number.isFinite(Number(storedLcMaxRaw)) ? Math.trunc(Number(storedLcMaxRaw)) : 50;
@@ -349,28 +314,17 @@ const init = () => {
   let scheduleEnabled = storedScheduleEnabled;
   let scheduleTime = storedScheduleTime;
   let scheduleIntervalId = null;
-  let lcToken = storedLcToken;
-  let lcLocationId = storedLcLocationId;
-  let lcPhoneField = storedLcPhoneField;
-  let lcTagPorVencer = storedLcTagPorVencer;
-  let lcTagCobro = storedLcTagCobro;
   let lcFromNumber = storedLcFromNumber;
-  let lcTplPorVencer = storedLcTplPorVencer;
-  let lcTplCobro = storedLcTplCobro;
   let lcTestToNumber = storedLcTestToNumber;
   let lcUseTemplate = storedLcUseTemplate;
-  let lcTemplateName = storedLcTemplateName;
-  let lcTemplateLang = storedLcTemplateLang;
-  let lcTemplateBody = storedLcTemplateBody;
   let lcAuto = storedLcAuto;
   let lcMax = storedLcMax;
 
+  const MSG_TPL_POR_VENCER = "Hola {nombre}, te recordamos que tienes un vencimiento el {vencimiento} por {saldo} (Factura {factura}).";
+  const MSG_TPL_COBRO = "Hola {nombre}, tu factura {factura} venció el {vencimiento} hace {dias} días. Saldo pendiente: {saldo}.";
+
   const isConfigured = () => {
     return String(configApiUrl || "").trim().length > 0 && String(configToken || "").trim().length > 0;
-  };
-
-  const isWhatsAppConfigured = () => {
-    return String(lcLocationId || "").trim().length > 0;
   };
 
   const setLoading = (loading) => {
@@ -501,25 +455,9 @@ const init = () => {
   };
 
   const syncLcFromInputs = () => {
-    if (configLcTokenInput) lcToken = String(configLcTokenInput.value || "").trim();
-    if (configLcLocationIdInput) lcLocationId = String(configLcLocationIdInput.value || "").trim();
     if (configLcFromNumberInput) lcFromNumber = String(configLcFromNumberInput.value || "").trim();
-    if (configLcTagPorVencerInput) lcTagPorVencer = String(configLcTagPorVencerInput.value || "").trim() || "recarIA_por_vencer";
-    if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
-    if (configLcTplPorVencerInput) lcTplPorVencer = String(configLcTplPorVencerInput.value || "").trim() || storedLcTplPorVencer;
-    if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
     if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
     if (configLcUseTemplateInput) lcUseTemplate = Boolean(configLcUseTemplateInput.checked);
-    if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
-    if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es";
-    if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
-
-    if (lcUseTemplate && !String(lcTemplateName || "").trim()) {
-      lcTemplateName = "utilidad_posventa";
-      if (configLcTemplateNameInput && !String(configLcTemplateNameInput.value || "").trim()) {
-        configLcTemplateNameInput.value = lcTemplateName;
-      }
-    }
   };
 
   const refreshScheduleUi = () => {
@@ -580,18 +518,8 @@ const init = () => {
   if (configUseProxyInput) configUseProxyInput.checked = useProxy;
   if (configScheduleEnabledInput) configScheduleEnabledInput.checked = scheduleEnabled;
   if (configScheduleTimeInput) configScheduleTimeInput.value = scheduleTime;
-  if (configLcTokenInput) configLcTokenInput.value = lcToken;
-  if (configLcLocationIdInput) configLcLocationIdInput.value = lcLocationId;
-  if (configLcPhoneFieldInput) configLcPhoneFieldInput.value = lcPhoneField;
   if (configLcFromNumberInput) configLcFromNumberInput.value = lcFromNumber;
-  if (configLcTagPorVencerInput) configLcTagPorVencerInput.value = lcTagPorVencer;
-  if (configLcTagCobroInput) configLcTagCobroInput.value = lcTagCobro;
-  if (configLcTplPorVencerInput) configLcTplPorVencerInput.value = lcTplPorVencer;
-  if (configLcTplCobroInput) configLcTplCobroInput.value = lcTplCobro;
   if (configLcUseTemplateInput) configLcUseTemplateInput.checked = lcUseTemplate;
-  if (configLcTemplateNameInput) configLcTemplateNameInput.value = lcTemplateName;
-  if (configLcTemplateLangInput) configLcTemplateLangInput.value = lcTemplateLang;
-  if (configLcTemplateBodyInput) configLcTemplateBodyInput.value = lcTemplateBody;
   if (configLcTestToNumberInput) configLcTestToNumberInput.value = lcTestToNumber;
   if (configLcAutoInput) configLcAutoInput.checked = lcAuto;
   if (configLcMaxInput) configLcMaxInput.value = String(lcMax || 50);
@@ -603,14 +531,9 @@ const init = () => {
     el.addEventListener("change", () => refreshScheduleUi());
   };
 
-  wireRefresh(configLcTokenInput);
-  wireRefresh(configLcLocationIdInput);
   wireRefresh(configLcFromNumberInput);
   wireRefresh(configLcTestToNumberInput);
   wireRefresh(configLcUseTemplateInput);
-  wireRefresh(configLcTemplateNameInput);
-  wireRefresh(configLcTemplateLangInput);
-  wireRefresh(configLcTemplateBodyInput);
 
   const normalizePhone = (raw) => {
     const s = String(raw || "").trim();
@@ -625,10 +548,7 @@ const init = () => {
   };
 
   const getPhone = (item) => {
-    const preferred = String(lcPhoneField || "").trim();
-    const preferredValue = preferred ? pickString(item, [preferred]) : "";
     const v =
-      preferredValue ||
       pickString(item, ["telefono", "Telefono", "tel", "Tel", "celular", "Celular", "movil", "Movil", "whatsapp", "WhatsApp", "phone", "Phone"]);
     return normalizePhone(v);
   };
@@ -657,11 +577,10 @@ const init = () => {
     if (!templateIsEnabled()) return null;
 
     const pickedMode = mode === "cobro" ? "cobro" : "porVencer";
-    const lang = String(lcTemplateLang || "").trim() || "es";
+    const lang = "es";
 
     const defaultName = pickedMode === "cobro" ? "cobro" : "por_vencer";
-    const configuredName = String(lcTemplateName || "").trim();
-    const name = configuredName === "por_vencer" || configuredName === "cobro" ? configuredName : defaultName;
+    const name = defaultName;
 
     const montoPlain = formatCOPPlain(toNumber(vars?.saldoNumero) ?? toNumber(vars?.saldo) ?? toNumber(String(vars?.saldo || "").replace(/[^\d.,-]/g, "")) ?? 0);
     const bodyByMode =
@@ -675,8 +594,7 @@ const init = () => {
     if (bodyByMode) {
       body = bodyByMode;
     } else {
-      const bodyTemplateLines = parseLines(lcTemplateBody);
-      body = bodyTemplateLines.map((line) => renderTemplate(line, vars));
+      body = [];
     }
 
     if (name === "por_vencer") {
@@ -705,7 +623,6 @@ const init = () => {
 
   const buildMessages = ({ mode }) => {
     const maxLocal = Math.max(1, Math.min(200, Number.isFinite(lcMax) ? lcMax : 50));
-    const tag = mode === "porVencer" ? String(lcTagPorVencer || "").trim() : String(lcTagCobro || "").trim();
     const wanted = [];
     const seen = new Set();
     let missingPhone = 0;
@@ -734,7 +651,7 @@ const init = () => {
       const factura = pickString(it, ["numfactura", "NumFactura", "numeFac", "NumeFac"]) || "";
       const vencimiento = pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
       const saldo = getMonto(it);
-      const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
+      const tpl = mode === "porVencer" ? MSG_TPL_POR_VENCER : MSG_TPL_COBRO;
       const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo), saldoNumero: saldo };
       const msg = renderTemplate(tpl, vars).trim();
 
@@ -744,7 +661,6 @@ const init = () => {
         message: msg,
       };
       if (email) payload.email = email;
-      if (tag) payload.tags = [tag];
       const tplPayload = buildTemplatePayload({ vars, mode });
       if (tplPayload) {
         payload.message = "Mensaje";
@@ -770,7 +686,7 @@ const init = () => {
 
       if (lcUseTemplate && !templateIsEnabled()) {
         setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
-        setConfigDebug({ error: "no_template", lcUseTemplate, lcTemplateName, lcTemplateLang });
+        setConfigDebug({ error: "no_template", lcUseTemplate });
         return { ok: false, error: "no_template" };
       }
 
@@ -800,7 +716,7 @@ const init = () => {
         const vencimiento = pickString(first, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
         const dias = getDias(first) ?? 0;
         const saldo = getMonto(first);
-        const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
+        const tpl = mode === "porVencer" ? MSG_TPL_POR_VENCER : MSG_TPL_COBRO;
         const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo), saldoNumero: saldo };
         const msg = renderTemplate(tpl, vars).trim();
 
@@ -831,8 +747,6 @@ const init = () => {
         headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({
           action: "sendWhatsApp",
-          token: lcToken,
-          locationId: lcLocationId,
           fromNumber: lcFromNumber,
           versionMsg: "2021-04-15",
           messages,
@@ -881,8 +795,6 @@ const init = () => {
             headers: { "content-type": "application/json", accept: "application/json" },
             body: JSON.stringify({
               action: "getConversationMessages",
-              token: lcToken,
-              locationId: lcLocationId,
               versionMsg: "2021-04-15",
               conversationId,
               limit: 20,
@@ -926,8 +838,6 @@ const init = () => {
                   headers: { "content-type": "application/json", accept: "application/json" },
                   body: JSON.stringify({
                     action: "sendWhatsApp",
-                    token: lcToken,
-                    locationId: lcLocationId,
                     fromNumber: lcFromNumber,
                     versionMsg: "2021-04-15",
                     messages: [retried],
@@ -1009,7 +919,7 @@ const init = () => {
 
       if (lcUseTemplate && !templateIsEnabled()) {
         setConfigStatus("Activa Template name o desmarca Enviar como plantilla.");
-        setConfigDebug({ error: "no_template", lcUseTemplate, lcTemplateName, lcTemplateLang });
+        setConfigDebug({ error: "no_template", lcUseTemplate });
         return;
       }
 
@@ -1022,7 +932,7 @@ const init = () => {
       setConfigDebug("—");
 
       const vars = { nombre: "Prueba", factura: "", vencimiento: "", dias: "0", saldo: "" };
-      const msgPayload = { name: "Prueba", toNumber: to, message: lcTplPorVencer || "Prueba" };
+      const msgPayload = { name: "Prueba", toNumber: to, message: MSG_TPL_POR_VENCER };
       const tplPayload = buildTemplatePayload({ vars, mode: "porVencer" });
       if (tplPayload) {
         msgPayload.message = "Mensaje";
@@ -1034,8 +944,6 @@ const init = () => {
         headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({
           action: "sendWhatsApp",
-          token: lcToken,
-          locationId: lcLocationId,
           fromNumber: lcFromNumber,
           versionMsg: "2021-04-15",
           messages: [msgPayload],
@@ -1083,8 +991,6 @@ const init = () => {
             headers: { "content-type": "application/json", accept: "application/json" },
             body: JSON.stringify({
               action: "getConversationMessages",
-              token: lcToken,
-              locationId: lcLocationId,
               versionMsg: "2021-04-15",
               conversationId,
               limit: 20,
@@ -1610,18 +1516,8 @@ const init = () => {
       window.localStorage.setItem(STORAGE_KEYS.scheduleEnabled, scheduleEnabled ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.scheduleTime, scheduleTime);
 
-      if (configLcTokenInput) lcToken = String(configLcTokenInput.value || "").trim();
-      if (configLcLocationIdInput) lcLocationId = String(configLcLocationIdInput.value || "").trim();
-      if (configLcPhoneFieldInput) lcPhoneField = String(configLcPhoneFieldInput.value || "").trim() || "telefono";
       if (configLcFromNumberInput) lcFromNumber = String(configLcFromNumberInput.value || "").trim();
-      if (configLcTagPorVencerInput) lcTagPorVencer = String(configLcTagPorVencerInput.value || "").trim() || "recarIA_por_vencer";
-      if (configLcTagCobroInput) lcTagCobro = String(configLcTagCobroInput.value || "").trim() || "recarIA_cobro";
-      if (configLcTplPorVencerInput) lcTplPorVencer = String(configLcTplPorVencerInput.value || "").trim() || storedLcTplPorVencer;
-      if (configLcTplCobroInput) lcTplCobro = String(configLcTplCobroInput.value || "").trim() || storedLcTplCobro;
       if (configLcUseTemplateInput) lcUseTemplate = Boolean(configLcUseTemplateInput.checked);
-      if (configLcTemplateNameInput) lcTemplateName = String(configLcTemplateNameInput.value || "").trim();
-      if (configLcTemplateLangInput) lcTemplateLang = String(configLcTemplateLangInput.value || "").trim() || "es";
-      if (configLcTemplateBodyInput) lcTemplateBody = String(configLcTemplateBodyInput.value || "");
       if (configLcTestToNumberInput) lcTestToNumber = String(configLcTestToNumberInput.value || "").trim();
       if (configLcAutoInput) lcAuto = Boolean(configLcAutoInput.checked);
       if (configLcMaxInput) {
@@ -1629,19 +1525,9 @@ const init = () => {
         lcMax = Number.isFinite(n) ? Math.max(1, Math.min(200, Math.trunc(n))) : 50;
       }
 
-      window.localStorage.setItem(STORAGE_KEYS.lcToken, lcToken);
-      window.localStorage.setItem(STORAGE_KEYS.lcLocationId, lcLocationId);
-      window.localStorage.setItem(STORAGE_KEYS.lcPhoneField, lcPhoneField);
       window.localStorage.setItem(STORAGE_KEYS.lcFromNumber, lcFromNumber);
-      window.localStorage.setItem(STORAGE_KEYS.lcTagPorVencer, lcTagPorVencer);
-      window.localStorage.setItem(STORAGE_KEYS.lcTagCobro, lcTagCobro);
-      window.localStorage.setItem(STORAGE_KEYS.lcTplPorVencer, lcTplPorVencer);
-      window.localStorage.setItem(STORAGE_KEYS.lcTplCobro, lcTplCobro);
       window.localStorage.setItem(STORAGE_KEYS.lcTestToNumber, lcTestToNumber);
       window.localStorage.setItem(STORAGE_KEYS.lcUseTemplate, lcUseTemplate ? "1" : "0");
-      window.localStorage.setItem(STORAGE_KEYS.lcTemplateName, lcTemplateName);
-      window.localStorage.setItem(STORAGE_KEYS.lcTemplateLang, lcTemplateLang);
-      window.localStorage.setItem(STORAGE_KEYS.lcTemplateBody, lcTemplateBody);
       window.localStorage.setItem(STORAGE_KEYS.lcAuto, lcAuto ? "1" : "0");
       window.localStorage.setItem(STORAGE_KEYS.lcMax, String(lcMax));
 
