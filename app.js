@@ -663,7 +663,7 @@ const init = () => {
     const configuredName = String(lcTemplateName || "").trim();
     const name = configuredName || defaultName;
 
-    const montoPlain = formatCOPPlain(toNumber(vars?.saldo) ?? toNumber(String(vars?.saldo || "").replace(/[^\d.,-]/g, "")) ?? 0);
+    const montoPlain = formatCOPPlain(toNumber(vars?.saldoNumero) ?? toNumber(vars?.saldo) ?? toNumber(String(vars?.saldo || "").replace(/[^\d.,-]/g, "")) ?? 0);
     const bodyByMode =
       name === "por_vencer"
         ? [String(vars?.nombre || ""), String(vars?.vencimiento || ""), `${montoPlain} COP`, String(vars?.factura || "")]
@@ -695,7 +695,7 @@ const init = () => {
         placeholders: { header: [], body, buttons: [] },
         components: [
           {
-            type: "body",
+            type: "BODY",
             parameters: body.map((text) => ({ type: "text", text: String(text ?? "") })),
           },
         ],
@@ -735,7 +735,7 @@ const init = () => {
       const vencimiento = pickString(it, ["vencimiento_cuota", "Vencimiento_Cuota", "vencFac", "VencFac"]) || "";
       const saldo = getMonto(it);
       const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
-      const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
+      const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo), saldoNumero: saldo };
       const msg = renderTemplate(tpl, vars).trim();
 
       const payload = {
@@ -806,7 +806,7 @@ const init = () => {
         const dias = getDias(first) ?? 0;
         const saldo = getMonto(first);
         const tpl = mode === "porVencer" ? lcTplPorVencer : lcTplCobro;
-        const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo) };
+        const vars = { nombre: name, factura, vencimiento, dias: String(Math.abs(dias)), saldo: formatCOP(saldo), saldoNumero: saldo };
         const msg = renderTemplate(tpl, vars).trim();
 
         const payload = { name, toNumber: preferredTo, message: msg };
